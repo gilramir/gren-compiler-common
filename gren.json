@@ -7,6 +7,8 @@
     "version": "1.0.0",
     "exposed-modules": [
         "Compiler.Ast.Source",
+        "Compiler.Ast.Source.Json",
+        "Compiler.Parse.Context.Json",
         "Compiler.Dependencies",
         "Compiler.ModuleName",
         "Compiler.PackageName",
