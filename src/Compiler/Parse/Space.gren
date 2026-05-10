@@ -2,6 +2,7 @@ module Compiler.Parse.Space exposing
     ( Error (..)
     , parser
     , scopeIndentToLineStart
+    , scopeIndentBelowLineStart
     , checkIndent
     , errorToString
     )
@@ -145,13 +146,29 @@ validWhiteSpace char =
     char == ' ' || char == '\n' || char == '\r'
 
 
-{-| This will set `Context.indent` to be ´Context.startLine` for the duration of
+{-| This will set `Context.indent` to be `Context.startLine` for the duration of
 the provided parser.
 -}
 scopeIndentToLineStart : Parser Context e v -> Parser Context e v
 scopeIndentToLineStart p =
     Parser.scopedUpdatePayload
         .lineStart
+        .indent
+        (\newIndent payload -> { payload | indent = newIndent })
+        p
+
+
+{-| Like `scopeIndentToLineStart`, but uses `max(indent, lineStart - 1)` so tokens at
+the same column as the current line start are still accepted by `checkIndent`. This matches
+the Haskell compiler's behavior for function-argument parsing: multi-line arguments may
+appear at the same column as the function name, but the indent can never drop below the
+enclosing declaration's column (which prevents col-1 tokens on same-line calls from being
+treated as arguments).
+-}
+scopeIndentBelowLineStart : Parser Context e v -> Parser Context e v
+scopeIndentBelowLineStart p =
+    Parser.scopedUpdatePayload
+        (\pl -> max pl.indent (pl.lineStart - 1))
         .indent
         (\newIndent payload -> { payload | indent = newIndent })
         p

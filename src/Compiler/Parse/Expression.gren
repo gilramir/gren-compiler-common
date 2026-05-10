@@ -138,7 +138,7 @@ parser =
                                     )
 
                         indentationBumped =
-                            Space.scopeIndentToLineStart completionParser
+                            Space.scopeIndentBelowLineStart completionParser
                     in
                     when firstTerm.value is
                         AST.Var _ ->
