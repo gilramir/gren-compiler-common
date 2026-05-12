@@ -171,8 +171,8 @@ term =
                         |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
                         |> Parser.skip spaceParser
                         |> Parser.keep expression
-                        |> Parser.keep Parser.getPosition
                         |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+                        |> Parser.keep Parser.getPosition
                     , Parser.succeed (\record end -> SourcePosition.at start end record)
                         |> Parser.keep recordParser
                         |> Parser.keep Parser.getPosition
