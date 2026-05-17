@@ -91,6 +91,19 @@ tests =
                             { row = 1, col = 3 }
                             (AST.TVar "a")
                     )
+        , test "Parenthesized end position includes closing paren" <| \_ ->
+            Parser.run PT.expression Context.empty "(a)"
+                |> expectLocatedExpression
+                    (SourcePosition.at
+                        { row = 1, col = 1 }
+                        { row = 1, col = 4 }
+                        (AST.TParens <|
+                            SourcePosition.at
+                                { row = 1, col = 2 }
+                                { row = 1, col = 3 }
+                                (AST.TVar "a")
+                        )
+                    )
         , test "Empty Record" <| \_ ->
             Parser.run PT.expression Context.empty "{ }"
                 |> expectExpression
@@ -285,4 +298,14 @@ expectExpression expected result =
             Expect.fail (Debug.toString err)
 
         Ok { value } ->
+            Expect.equal expected value
+
+
+expectLocatedExpression : (SourcePosition.Located a) -> Result (Array (Parser.DeadEnd c e)) (SourcePosition.Located a) -> Expectation
+expectLocatedExpression expected result =
+    when result is
+        Err err ->
+            Expect.fail (Debug.toString err)
+
+        Ok value ->
             Expect.equal expected value
