@@ -29,7 +29,7 @@ tests =
                         )
             , test "Float" <| \_ ->
                 Parser.run PE.parser Context.empty "3.14"
-                    |> expectExpression (AST.NumberLiteral (Number.FloatingPoint 3.14))
+                    |> expectExpression (AST.NumberLiteral (Number.FloatingPoint { val = 3.14, text = "3.14" }))
             , test "Hex" <| \_ ->
                 Parser.run PE.parser Context.empty "0xDE"
                     |> expectExpression (AST.NumberLiteral (Number.Hex 0xDE))
