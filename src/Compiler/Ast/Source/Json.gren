@@ -550,10 +550,11 @@ encNumberOutcome outcome =
                 [ { key = "type", value = Json.string "int" }
                 , { key = "value", value = Json.int n }
                 ]
-        Number.FloatingPoint f ->
+        Number.FloatingPoint { val = fval, text = ftext } ->
             Json.object
                 [ { key = "type", value = Json.string "float" }
-                , { key = "value", value = Json.float f }
+                , { key = "value", value = Json.float fval }
+                , { key = "text", value = Json.string ftext }
                 ]
         Number.Hex h ->
             Json.object
