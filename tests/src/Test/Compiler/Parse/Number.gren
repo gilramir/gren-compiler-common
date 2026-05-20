@@ -34,19 +34,48 @@ tests =
                     |> Result.map
                         (\outcome ->
                             when outcome is
-                                PN.Integer value -> 
-                                    PN.FloatingPoint (toFloat value)
+                                PN.Integer value ->
+                                    PN.FloatingPoint { val = toFloat value, text = String.fromInt value }
 
                                 _ ->
                                     outcome
                         )
-                    |> Expect.equal (Ok (PN.FloatingPoint float))
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = float, text = String.fromFloat float }))
             , test "Requires a number after ." <| \{} ->
                 run "0."
                     |> expectErr PN.ExpectedInt
             , test "when followed by letter, it fails" <| \{} ->
                 run "0.15a"
                     |> expectErr PN.NotANumber
+            ]
+        , describe "Scientific notation"
+            [ test "integer with exponent" <| \{} ->
+                run "1e5"
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.0e5, text = "1e5" }))
+            , test "zero with exponent" <| \{} ->
+                run "0e3"
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 0.0e3, text = "0e3" }))
+            , test "decimal with exponent" <| \{} ->
+                run "1.5e3"
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e3, text = "1.5e3" }))
+            , test "uppercase E" <| \{} ->
+                run "1.5E3"
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e3, text = "1.5E3" }))
+            , test "explicit positive exponent" <| \{} ->
+                run "1.5e+3"
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e3, text = "1.5e+3" }))
+            , test "negative exponent" <| \{} ->
+                run "1.5e-3"
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e-3, text = "1.5e-3" }))
+            , test "negative number with exponent" <| \{} ->
+                run "-1.5e3"
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = -1.5e3, text = "-1.5e3" }))
+            , test "requires digits after e" <| \{} ->
+                run "1e"
+                    |> expectErr PN.ExpectedInt
+            , test "requires digits after e sign" <| \{} ->
+                run "1e+"
+                    |> expectErr PN.ExpectedInt
             ]
         , describe "Hex"
             [ test "Can parse hex" <| \{} ->
