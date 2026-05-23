@@ -100,17 +100,9 @@ parseLoop _state =
             |> Parser.map (\_ -> Parser.Loop {})
         , Parser.succeed
             (\start comment end ->
-                let
-                    -- Strip `{-` and `-}`. Don't use `String.dropLast 2`
-                    -- here: it relies on `String.slice` with a negative
-                    -- index, which is off by one per non-BMP code point
-                    -- in the string (kernel bug). Compute the cutoff from
-                    -- `String.count` (a code-point count) instead.
-                    withoutOpen = String.dropFirst 2 comment
-                    n = String.count withoutOpen
-                    trimmed = String.takeFirst (n - 2) withoutOpen
-                in
-                trimmed
+                comment
+                    |> String.dropFirst 2
+                    |> String.dropLast 2
                     |> Context.Block
                     |> SourcePosition.at start end
             )

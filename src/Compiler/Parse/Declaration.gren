@@ -152,17 +152,10 @@ docParser toErr =
         [ Parser.succeed
             (\docStart doc docEnd ->
                 let
-                    -- Strip `{-|` and `-}`. Don't use `String.dropLast 2`
-                    -- here: it relies on `String.slice` with a negative
-                    -- index, which is off by one per non-BMP code point in
-                    -- the string (kernel bug). Compute the cutoff from
-                    -- `String.count` (a code-point count) instead.
                     trimmedDoc =
-                        let
-                            withoutOpen = String.dropFirst 3 doc
-                            n = String.count withoutOpen
-                        in
-                        String.takeFirst (n - 2) withoutOpen
+                        doc
+                            |> String.dropFirst 3
+                            |> String.dropLast 2
                 in
                 Just <|
                     SourcePosition.at docStart docEnd trimmedDoc
