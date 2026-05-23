@@ -153,9 +153,7 @@ docParser toErr =
             (\docStart doc docEnd ->
                 let
                     trimmedDoc =
-                        doc
-                            |> String.dropFirst 3
-                            |> String.dropLast 2
+                        String.sliceUnits 3 -2 doc
                 in
                 Just <|
                     SourcePosition.at docStart docEnd trimmedDoc

@@ -876,6 +876,146 @@ tests =
                                 }
                         ]
                     }
+        , test "Function with documentation comment" <| \_ ->
+            Parser.run PM.parser Context.empty
+                """
+                module MyModule exposing (..)
+
+                {-| Module docs
+                -}
+
+                {-| This function adds two numbers together
+                -}
+                add : Int -> Int -> Int
+                add x y =
+                    x + y
+                """
+                |> expect
+                    { name =
+                        SourcePosition.at
+                            { row = 1, col = 8 }
+                            { row = 1, col = 16 }
+                            "MyModule"
+                    , exports = AST.Open
+                    , docs = Just <|
+                        SourcePosition.at
+                            { row = 3, col = 1 }
+                            { row = 4, col = 3 }
+                            " Module docs\n"
+                    , imports = []
+                    , values =
+                        [ SourcePosition.at
+                            { row = 8, col = 1 }
+                            { row = 10, col = 10 }
+                            { docs = Just <|
+                                SourcePosition.at
+                                    { row = 6, col = 1 }
+                                    { row = 7, col = 3 }
+                                    " This function adds two numbers together\n"
+                            , value =
+                                { name =
+                                    SourcePosition.at
+                                        { row = 9, col = 1 }
+                                        { row = 9, col = 4 }
+                                        "add"
+                                , signature =
+                                    Just
+                                        { start =
+                                            { row = 8, col = 1 }
+                                        , type_ =
+                                            SourcePosition.at
+                                                { row = 8, col = 7 }
+                                                { row = 8, col = 24 }
+                                                (AST.TLambda
+                                                    { from =
+                                                        SourcePosition.at
+                                                            { row = 8, col = 7 }
+                                                            { row = 8, col = 10 }
+                                                            (AST.TType
+                                                                { name =
+                                                                    SourcePosition.at
+                                                                        { row = 8, col = 7 }
+                                                                        { row = 8, col = 10 }
+                                                                        "Int"
+                                                                , args = []
+                                                                }
+                                                            )
+                                                    , to =
+                                                        SourcePosition.at
+                                                            { row = 8, col = 14 }
+                                                            { row = 8, col = 24 }
+                                                            (AST.TLambda
+                                                                { from =
+                                                                    SourcePosition.at
+                                                                        { row = 8, col = 14 }
+                                                                        { row = 8, col = 17 }
+                                                                        (AST.TType
+                                                                            { name =
+                                                                                SourcePosition.at
+                                                                                    { row = 8, col = 14 }
+                                                                                    { row = 8, col = 17 }
+                                                                                    "Int"
+                                                                            , args = []
+                                                                            }
+                                                                        )
+                                                                , to =
+                                                                    SourcePosition.at
+                                                                        { row = 8, col = 21 }
+                                                                        { row = 8, col = 24 }
+                                                                        (AST.TType
+                                                                            { name =
+                                                                                SourcePosition.at
+                                                                                    { row = 8, col = 21 }
+                                                                                    { row = 8, col = 24 }
+                                                                                    "Int"
+                                                                            , args = []
+                                                                            }
+                                                                        )
+                                                                }
+                                                            )
+                                                    }
+                                                )
+                                        }
+                                , args =
+                                    [ SourcePosition.at
+                                        { row = 9, col = 5 }
+                                        { row = 9, col = 6 }
+                                        (AST.PVar "x")
+                                    , SourcePosition.at
+                                        { row = 9, col = 7 }
+                                        { row = 9, col = 8 }
+                                        (AST.PVar "y")
+                                    ]
+                                , body =
+                                    SourcePosition.at
+                                        { row = 10, col = 5 }
+                                        { row = 10, col = 10 }
+                                        (AST.Binops
+                                            { left =
+                                                SourcePosition.at
+                                                    { row = 10, col = 5 }
+                                                    { row = 10, col = 6 }
+                                                    (AST.Var { name = "x", varType = AST.LowVar })
+                                            , operator =
+                                                SourcePosition.at
+                                                    { row = 10, col = 7 }
+                                                    { row = 10, col = 8 }
+                                                    "+"
+                                            , right =
+                                                SourcePosition.at
+                                                    { row = 10, col = 9 }
+                                                    { row = 10, col = 10 }
+                                                    (AST.Var { name = "y", varType = AST.LowVar })
+                                            }
+                                        )
+                                }
+                            }
+                        ]
+                    , unions = []
+                    , aliases = []
+                    , binops = []
+                    , effects = AST.NoEffects
+                    }
         ]
 
 expect : AST.Module -> Result (Array (Parser.DeadEnd c e)) AST.Module -> Expectation
