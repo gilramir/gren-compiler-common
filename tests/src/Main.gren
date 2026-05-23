@@ -16,6 +16,7 @@ import Test.Compiler.Parse.String
 import Test.Compiler.Parse.Variable
 import Test.Compiler.Parse.Pattern
 import Test.Compiler.Parse.Expression
+import Test.Compiler.Parse.LongExpression
 import Test.Compiler.Parse.Type
 import Test.Compiler.Parse.Declaration
 import Test.Compiler.Parse.Module
@@ -33,6 +34,7 @@ main =
             , Test.Compiler.Platform.tests
             , Test.String.EditDistance.tests
             , Test.Compiler.Parse.Expression.tests
+            , Test.Compiler.Parse.LongExpression.tests
             , Test.Compiler.Parse.Number.tests
             , Test.Compiler.Parse.Operator.tests
             , Test.Compiler.Parse.Space.tests

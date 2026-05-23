@@ -107,56 +107,69 @@ errorToString error =
 -}
 parser : Parser Context Error AST.Expression
 parser =
+    parserNoArgs
+        |> Parser.andThen
+            (\firstTerm ->
+                let
+                    completionParser =
+                        Parser.succeed identity
+                            |> Parser.skip spaceParser
+                            |> Parser.keep
+                                (Parser.loop
+                                    { currentTerm = firstTerm, currentArgs = [], incompleteBinop = Nothing }
+                                    argOrOperatorLoop
+                                )
+                            |> Parser.map
+                                (\state ->
+                                    let
+                                        finalExpression =
+                                            toCall state.currentTerm state.currentArgs
+                                    in
+                                    when state.incompleteBinop is
+                                        Just incomplete ->
+                                            SourcePosition.at
+                                                incomplete.left.start
+                                                finalExpression.end
+                                                (AST.Binops
+                                                    { left = incomplete.left
+                                                    , operator = incomplete.operator
+                                                    , right = finalExpression
+                                                    }
+                                                )
+                                        
+                                        Nothing ->
+                                            finalExpression
+                                )
+
+                    indentationBumped =
+                        Space.scopeIndentToLineStart completionParser
+                in
+                when firstTerm.value is
+                    AST.Var _ ->
+                        indentationBumped
+
+                    AST.VarQual _ ->
+                        indentationBumped
+
+                    _ ->
+                        completionParser
+            )
+
+
+parserNoArgs : Parser Context Error AST.Expression
+parserNoArgs =
     Parser.oneOf
         [ ifParser
         , whenParser
         , letParser
         , possiblyNegativeTerm
-            |> Parser.andThen
-                (\firstTerm ->
-                    let
-                        completionParser =
-                            Parser.succeed identity
-                                |> Parser.skip spaceParser
-                                |> Parser.keep
-                                    (Parser.loop
-                                        { currentTerm = firstTerm, currentArgs = [], binopExpression = Nothing }
-                                        argOrOperatorLoop
-                                    )
-                                |> Parser.map
-                                    (\state ->
-                                        let
-                                            finalExpression =
-                                                toCall state.currentTerm state.currentArgs
-                                        in
-                                        when state.binopExpression is
-                                            Just binopExpr ->
-                                                binopExpr
-                                            
-                                            Nothing ->
-                                                finalExpression
-                                    )
-
-                        indentationBumped =
-                            Space.scopeIndentToLineStart completionParser
-                    in
-                    when firstTerm.value is
-                        AST.Var _ ->
-                            indentationBumped
-
-                        AST.VarQual _ ->
-                            indentationBumped
-
-                        _ ->
-                            completionParser
-                )
         ]
 
 
 type alias ArgOrOperatorState =
     { currentTerm : AST.Expression
     , currentArgs : Array AST.Expression
-    , binopExpression : Maybe AST.Expression
+    , incompleteBinop : Maybe { left : AST.Expression, operator : SourcePosition.Located String }
     }
 
 
@@ -180,12 +193,12 @@ argOrOperatorLoop state =
 
                                     else
                                         Parser.succeed (\nextTerm -> Parser.Loop <| pushStateOperator nextTerm operator state)
-                                            |> Parser.keep parser
+                                            |> Parser.keep parserNoArgs
                                 )
 
                     else
                         Parser.succeed (\nextTerm -> Parser.Loop <| pushStateOperator nextTerm operator state)
-                            |> Parser.keep parser
+                            |> Parser.keep parserNoArgs
                 )
                 |> Parser.skip spaceParser
         , Parser.succeed (\arg -> Parser.Loop <| pushStateArg arg state)
@@ -218,18 +231,34 @@ pushStateOperator expr operator state =
                     }
                 )
     in
-    
-    when state.binopExpression is
+    when state.incompleteBinop is
         Just existingBinop ->
-            { currentTerm = binopExpression
+            { currentTerm = expr
             , currentArgs = []
-            , binopExpression = Just (SourcePosition.at existingBinop.start binopExpression.end (AST.Binops { left = existingBinop, operator = operator, right = binopExpression }))
+            , incompleteBinop =
+                Just <|
+                    { left =
+                        SourcePosition.at
+                            existingBinop.left.start
+                            leftExpression.end
+                            (AST.Binops
+                                { left = existingBinop.left
+                                , operator = existingBinop.operator
+                                , right = leftExpression
+                                }
+                            )
+                    , operator = operator
+                    }
             }
         
         Nothing ->
             { currentTerm = expr
             , currentArgs = []
-            , binopExpression = Just binopExpression
+            , incompleteBinop =
+                Just
+                    { left = leftExpression
+                    , operator = operator
+                    }
             }
 
 
