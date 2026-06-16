@@ -1,6 +1,7 @@
 module Compiler.Parse.Pattern exposing
     ( Error (..)
     , parser
+    , topLevelParser
     , errorToString
     )
 
@@ -185,15 +186,53 @@ parenthesized =
     Parser.succeed identity
         |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
         |> Parser.skip spaceParser
-        -- When parens are used, allow `as` pattern
-        |> Parser.keep
-            (Parser.oneOf
-                [ SourcePosition.parser (numberBy Number.parser)
-                , Parser.lazy (\_ -> parser)
-                ]
-            )
+        |> Parser.keep topLevelParser
         |> Parser.skip spaceParser
         |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+
+
+topLevelParser : Parser Context Error AST.Pattern
+topLevelParser =
+    (Parser.oneOf
+        [ SourcePosition.parser (numberBy Number.parser)
+        , Parser.succeed (\var arg -> { ctor = var, arg = arg })
+            |> Parser.keep (SourcePosition.parser (Parser.mapError VariableError Variable.foreignUpper))
+            |> Parser.skip spaceParser
+            |> Parser.keep
+                (Parser.oneOf
+                    [ Parser.succeed Just
+                        |> Parser.keep (Parser.lazy (\_ -> parserNoAlias))
+                    , Parser.succeed Nothing
+                    ]
+                )
+            |> Parser.map
+                (\{ ctor = { start, end, value }, arg } ->
+                    when value is
+                        Variable.Unqualified ctor ->
+                            SourcePosition.at
+                                start
+                                (Maybe.withDefault end (Maybe.map .end arg))
+                                (AST.PCtor
+                                    { name = SourcePosition.at start end ctor
+                                    , arg = arg
+                                    }
+                                )
+
+                        Variable.Qualified { module_, name } ->
+                            SourcePosition.at
+                                start
+                                (Maybe.withDefault end (Maybe.map .end arg))
+                                (AST.PCtorQual
+                                    { varRegion = { start = start, end = end }
+                                    , module_ = module_
+                                    , name = name
+                                    , arg = arg
+                                    }
+                                )
+                )
+        , Parser.lazy (\_ -> parser)
+        ]
+    )
 
 
 term : Parser Context Error AST.Pattern
@@ -212,23 +251,14 @@ term =
                         )
                 , lowerCaseVariable
                     |> Parser.map AST.PVar
-                , Parser.succeed (\var arg -> { ctor = var, arg = arg })
-                    |> Parser.keep (SourcePosition.parser (Parser.mapError VariableError Variable.foreignUpper))
-                    |> Parser.skip spaceParser
-                    |> Parser.keep
-                        (Parser.oneOf
-                            [ Parser.succeed Just
-                                |> Parser.keep (Parser.lazy (\_ -> parserNoAlias))
-                            , Parser.succeed Nothing
-                            ]
-                        )
+                , SourcePosition.parser (Parser.mapError VariableError Variable.foreignUpper)
                     |> Parser.map
-                        (\{ ctor = { start, end, value }, arg } ->
+                        (\{ start, end, value } ->
                             when value is
                                 Variable.Unqualified ctor ->
                                     AST.PCtor
                                         { name = SourcePosition.at start end ctor
-                                        , arg = arg
+                                        , arg = Nothing
                                         }
 
                                 Variable.Qualified { module_, name } ->
@@ -236,7 +266,7 @@ term =
                                         { varRegion = { start = start, end = end }
                                         , module_ = module_
                                         , name = name
-                                        , arg = arg
+                                        , arg = Nothing
                                         }
                         )
                 , numberBy Number.zeroOrHigher
@@ -249,29 +279,6 @@ term =
                 ]
             )
         |> Parser.keep Parser.getPosition
-        -- Correct positions of Constructors
-        |> Parser.map
-            (\t ->
-                when t is
-                    { value = AST.PCtor { name, arg } } ->
-                        { start = t.start
-                        , value = t.value
-                        , end =
-                            Maybe.map .end arg
-                                |> Maybe.withDefault name.end
-                        }
-
-                    { value = AST.PCtorQual { varRegion, arg } } ->
-                        { start = t.start
-                        , value = t.value
-                        , end =
-                            Maybe.map .end arg
-                                |> Maybe.withDefault varRegion.end
-                        }
-
-                    _ ->
-                        t
-            )
 
 
 spaceParser : Parser Context Error {}

@@ -515,7 +515,7 @@ whenParser =
 whenBranchParser : Parser Context Error AST.WhenBranch
 whenBranchParser =
     Parser.succeed (\pattern body -> { pattern = pattern, body = body })
-        |> Parser.keep (Parser.mapError PatternError Pattern.parser)
+        |> Parser.keep (Parser.mapError PatternError Pattern.topLevelParser)
         |> Parser.skip spaceParser
         |> Parser.skip (Parser.keyword "->" (ExpectedKeyword "->"))
         |> Parser.skip spaceParser
