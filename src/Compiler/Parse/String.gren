@@ -205,7 +205,7 @@ string =
                                                     whiteSpacePortion =
                                                         String.takeFirst requiredIndent line
                                                 in
-                                                String.count whiteSpacePortion == requiredIndent
+                                                String.count whiteSpacePortion <= requiredIndent
                                                     && String.all (\c -> c == ' ') whiteSpacePortion
                                         )
                         in
