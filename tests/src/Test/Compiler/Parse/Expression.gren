@@ -84,6 +84,56 @@ tests =
                                 }
                             )
                         )
+            , test "Accessor after qualified var" <| \_ ->
+                Parser.run PE.parser Context.empty "Nested.accessor.expression"
+                    |> expectLocatedExpression
+                        (SourcePosition.at
+                            { row = 1, col = 1 }
+                            { row = 1, col = 27 }
+                            (AST.Access
+                                { expression =
+                                    { start = { row = 1, col = 1 }
+                                    , end = { row = 1, col = 16 }
+                                    , value =
+                                        AST.VarQual
+                                            { name = "accessor"
+                                            , qualifier = "Nested"
+                                            , varType = AST.LowVar
+                                            }
+                                    }
+                                , accessor = "expression"
+                                }
+                            )
+                        )
+            , test "accessor after record literal" <| \_ ->
+                Parser.run PE.parser Context.empty "{ a = 1 }.a"
+                    |> expectLocatedExpression
+                        (SourcePosition.at
+                            { row = 1, col = 1 }
+                            { row = 1, col = 12 }
+                            (AST.Access
+                                { expression =
+                                    SourcePosition.at
+                                        { row = 1, col = 1 }
+                                        { row = 1, col = 10 }
+                                        (AST.Record
+                                            [ { field =
+                                                    SourcePosition.at
+                                                        { row = 1, col = 3 }
+                                                        { row = 1, col = 4 }
+                                                        "a"
+                                              , value =
+                                                    SourcePosition.at
+                                                        { row = 1, col = 7 }
+                                                        { row = 1, col = 8 }
+                                                        (AST.NumberLiteral (Number.Integer 1))
+                                              }
+                                            ]
+                                        )
+                                , accessor = "a"
+                                }
+                            )
+                        )
             , test "function calls" <| \_ ->
                 Parser.run PE.parser Context.empty "func a b"
                     |> expectExpression
@@ -243,6 +293,45 @@ tests =
                                     )
                                 ]
                             }
+                        )
+            , test "accessor after function call" <| \_ ->
+                Parser.run PE.parser Context.empty "(func a b).c"
+                    |> expectLocatedExpression
+                        (SourcePosition.at
+                            { row = 1, col = 1 }
+                            { row = 1, col = 13 }
+                            (AST.Access
+                                { expression =
+                                    SourcePosition.at
+                                        { row = 1, col = 1 }
+                                        { row = 1, col = 11 }
+                                        (AST.Parens
+                                            (SourcePosition.at
+                                                { row = 1, col = 2 }
+                                                { row = 1, col = 10 }
+                                                (AST.Call
+                                                    { fn =
+                                                        SourcePosition.at
+                                                            { row = 1, col = 2 }
+                                                            { row = 1, col = 6 }
+                                                            (AST.Var { name = "func", varType = AST.LowVar })
+                                                    , args =
+                                                        [ SourcePosition.at
+                                                            { row = 1, col = 7 }
+                                                            { row = 1, col = 8 }
+                                                            (AST.Var { name = "a", varType = AST.LowVar })
+                                                        , SourcePosition.at
+                                                            { row = 1, col = 9 }
+                                                            { row = 1, col = 10 }
+                                                            (AST.Var { name = "b", varType = AST.LowVar })
+                                                        ]
+                                                    }
+                                                )
+                                            )
+                                        )
+                                , accessor = "c"
+                                }
+                            )
                         )
             , test "function calls with when-is as argument" <| \_ ->
                 Parser.run PE.parser Context.empty

@@ -673,8 +673,7 @@ term =
                 , Parser.succeed identity
                     |> Parser.skip (Parser.chompChar '_' (ExpectedChar '_'))
                     |> Parser.keep lowerCaseVariable
-                    |> Parser.andThen
-                        (\_ -> Parser.problem WildcardAttempt)
+                    |> Parser.andThen (\_ -> Parser.problem WildcardAttempt)
                 ]
             )
         |> Parser.keep Parser.getPosition
@@ -682,6 +681,15 @@ term =
             (\expr ->
                 when expr.value is
                     AST.Var { varType = AST.LowVar } ->
+                        accessible expr
+
+                    AST.VarQual { varType = AST.LowVar } ->
+                        accessible expr
+
+                    AST.Record _ ->
+                        accessible expr
+
+                    AST.Parens _ ->
                         accessible expr
 
                     AST.Lambda { body } ->
