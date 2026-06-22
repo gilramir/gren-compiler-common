@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-06-22
+
+### Added
+
+- `Pattern.topLevelParser` parses exactly one pattern, as opposed to _one or more_. It's less conservative
+in cases like `Ctor one`, where `Pattern.parser` will parse two patterns
+
+### Changed
+
+- Blank lines (zero or any number of whitespace characters) are now tolerated in multi-line strings
+- `Number.Float` now includes the originally parsed text representation of the `Float`
+
+### Fixed
+
+- `a.accessor` is no longer parsed as `a .accessor`
+- Ctor destructuring always consumed the next pattern as an argument. `Ctor one` was parsed as `(Ctor one)`
+- Performance increase when parsing comments
+- Long operator chains no longer risks stack overflow
+
 ## [2.0.0] - 2026-04-28
 
 ### Added
