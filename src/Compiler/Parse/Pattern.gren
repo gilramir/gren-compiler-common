@@ -8,7 +8,7 @@ module Compiler.Parse.Pattern exposing
 
 {-| This module provides parsers for Gren patterns.
 
-@docs parser, Error, errorToString
+@docs parser, topLevelParser, Error, errorToString
 -}
 
 
@@ -192,6 +192,10 @@ parenthesized =
         |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
 
 
+{-| Use this parser when you know that you're expecting exactly one pattern, as opposed
+to _one or more_ patterns. As an example: this parser will treat `MyCtor one` as one pattern,
+not two.
+-}
 topLevelParser : Parser Context Error AST.Pattern
 topLevelParser =
     (Parser.oneOf
