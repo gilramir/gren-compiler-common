@@ -9,8 +9,8 @@
 #
 set -e
 
-if ! command -v gren-coverage >/dev/null; then
-  echo "!! gren-coverage not found on PATH — install it via npm" >&2
+if ! command -v gren-coverage-node >/dev/null; then
+  echo "!! gren-coverage-node not found on PATH — install it via npm" >&2
   exit 1
 fi
 
@@ -35,14 +35,14 @@ echo "==> joining"
 # gren-coverage.js (the one irreducibly-JS step) for the sourcemap/V8 decode.
 # Absolute --src keeps the report's file paths clean (no ..). Its stdout summary
 # is suppressed here; the "wrote ..." note goes to stderr.
-gren-coverage join \
+gren-coverage-node join \
   --app "${ROOT}/cov-app" \
   --cov "${COVDIR}" \
   --src "${ROOT}" \
   --out "${OUT}/coverage.json" >/dev/null
 
 echo "==> rendering lcov -> ${OUT}/coverage.lcov"
-gren-coverage render lcov "${OUT}/coverage.json" > "${OUT}/coverage.lcov"
+gren-coverage-node render lcov "${OUT}/coverage.json" > "${OUT}/coverage.lcov"
 
 # Generate HTML
 if command -v genhtml >/dev/null; then
@@ -54,7 +54,7 @@ fi
 
 
 # Terminal report (the four-state view). genhtml the lcov for a browsable one:
-gren-coverage render text "${OUT}/coverage.json"
+gren-coverage-node render text "${OUT}/coverage.json"
 
 # Propagate the test result so CI still fails on a failing suite.
 exit "${test_rc}"
