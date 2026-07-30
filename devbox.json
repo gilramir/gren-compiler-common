@@ -13,6 +13,12 @@
         "cd tests/",
         "gren run Main",
         "gren run SnapshotMain"
+      ],
+      "cov": [
+        "cd tests/",
+        "gren make --output cov-app --sourcemaps Main",
+        "mkdir -p out/v8cov",
+        "NODE_V8_COVERAGE=out/v8cov node cov-app"
       ]
     }
   }
