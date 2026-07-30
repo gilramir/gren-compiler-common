@@ -38,7 +38,7 @@ echo "==> joining"
 gren-coverage-node join \
   --app "${ROOT}/cov-app" \
   --cov "${COVDIR}" \
-  --src "${ROOT}" \
+  --src "${ROOT}"/.. \
   --out "${OUT}/coverage.json" >/dev/null
 
 echo "==> rendering lcov -> ${OUT}/coverage.lcov"
