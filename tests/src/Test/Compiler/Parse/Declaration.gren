@@ -648,5 +648,7 @@ expectDoc expectedDocs expectedValue result =
                 { docs = Just expectedDocs
                 , value = expectedValue
                 }
-                decl
+                { docs = decl.docs
+                , value = decl.value
+                }
 

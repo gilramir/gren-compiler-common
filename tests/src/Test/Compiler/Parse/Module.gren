@@ -1051,7 +1051,84 @@ tests =
                     """
                     |> expectOk
             ]
+        , describe "declaration positions"
+            -- A declaration's start used to be taken from the row of its
+            -- *name*, forced to column 1. `import`, `type`, `type alias` and
+            -- `port` all put a keyword before the name, and a newline between
+            -- the two is legal — so the recorded position pointed at the wrong
+            -- row, and at a column where nothing begins.
+            [ test "import on its own row" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module PosBug exposing (Foo)
+
+
+                    import
+                        Array
+                    """
+                    |> expectImportStart { row = 4, col = 1 }
+            , test "type alias split across rows" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module PosBug exposing (Foo)
+
+
+                    type
+                        alias Foo =
+                        { x : Int }
+                    """
+                    |> expectAliasStart { row = 4, col = 1 }
+            , test "type split across rows" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module PosBug exposing (Foo)
+
+
+                    type
+                        Foo
+                        = Bar
+                    """
+                    |> expectUnionStart { row = 4, col = 1 }
+            , test "a single-row import still starts at its own row" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module PosBug exposing (Foo)
+
+                    import Array
+                    """
+                    |> expectImportStart { row = 3, col = 1 }
+            ]
         ]
+
+
+expectImportStart : SourcePosition.Position -> Result (Array (Parser.DeadEnd c e)) AST.Module -> Expectation
+expectImportStart expected result =
+    expectFirstStart expected (Result.map .imports result)
+
+
+expectAliasStart : SourcePosition.Position -> Result (Array (Parser.DeadEnd c e)) AST.Module -> Expectation
+expectAliasStart expected result =
+    expectFirstStart expected (Result.map .aliases result)
+
+
+expectUnionStart : SourcePosition.Position -> Result (Array (Parser.DeadEnd c e)) AST.Module -> Expectation
+expectUnionStart expected result =
+    expectFirstStart expected (Result.map .unions result)
+
+
+expectFirstStart : SourcePosition.Position -> Result (Array (Parser.DeadEnd c e)) (Array (SourcePosition.Located a)) -> Expectation
+expectFirstStart expected result =
+    when result is
+        Err err ->
+            Expect.fail (Debug.toString err)
+
+        Ok items ->
+            when Array.first items is
+                Just first ->
+                    Expect.equal expected first.start
+
+                Nothing ->
+                    Expect.fail "Expected at least one declaration"
 
 
 expectOk : Result (Array (Parser.DeadEnd c e)) a -> Expectation

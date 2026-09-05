@@ -692,6 +692,14 @@ term =
                     AST.Record _ ->
                         accessible expr
 
+                    AST.Update _ ->
+                        -- A record update is a term that yields a record, so
+                        -- `{ r | x = 1 }.x` is a field access like any other.
+                        -- Without this branch the `.x` fell through to the
+                        -- accessor-function term and the whole thing became an
+                        -- application — a different program, silently.
+                        accessible expr
+
                     AST.Parens _ ->
                         accessible expr
 

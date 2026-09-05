@@ -1912,7 +1912,70 @@ tests =
                 Parser.run PE.parser Context.empty "when x is\n    Just y as whole ->\n        whole"
                     |> expectOk
             ]
+        , describe "postfix field access"
+            -- A `.field` written tight against the term before it is a field
+            -- access. Written with a space it is an application of the
+            -- accessor function, which is a different program. Anything that
+            -- takes the accessor-function branch for the tight spelling has
+            -- lost the distinction at parse time.
+            [ test "after a parenthesized call" <| \_ ->
+                Parser.run PE.parser Context.empty "(f x).field"
+                    |> expectAccessOf "field"
+            , test "after a record literal" <| \_ ->
+                Parser.run PE.parser Context.empty "{ x = 1 }.x"
+                    |> expectAccessOf "x"
+            , test "after a record update" <| \_ ->
+                Parser.run PE.parser Context.empty "{ r | x = 1 }.x"
+                    |> expectAccessOf "x"
+            , test "after a qualified variable" <| \_ ->
+                Parser.run PE.parser Context.empty "Config.default.timeout"
+                    |> expectAccessOf "timeout"
+            , test "after a plain variable" <| \_ ->
+                Parser.run PE.parser Context.empty "record.field"
+                    |> expectAccessOf "field"
+            , test "chained after a record update" <| \_ ->
+                Parser.run PE.parser Context.empty "{ r | x = 1 }.x.y"
+                    |> expectAccessOf "y"
+            , test "with a space it stays an application of the accessor" <| \_ ->
+                Parser.run PE.parser Context.empty "{ x = 1 } .x"
+                    |> expectCallWithAccessorArg
+            ]
         ]
+
+
+expectAccessOf : String -> Result (Array (Parser.DeadEnd c e)) AST.Expression -> Expectation
+expectAccessOf field result =
+    when result is
+        Err err ->
+            Expect.fail (Debug.toString err)
+
+        Ok { value } ->
+            when value is
+                AST.Access { accessor } ->
+                    Expect.equal field accessor
+
+                other ->
+                    Expect.fail ("Expected a field access, got " ++ Debug.toString other)
+
+
+expectCallWithAccessorArg : Result (Array (Parser.DeadEnd c e)) AST.Expression -> Expectation
+expectCallWithAccessorArg result =
+    when result is
+        Err err ->
+            Expect.fail (Debug.toString err)
+
+        Ok { value } ->
+            when value is
+                AST.Call { args } ->
+                    when Array.map .value args is
+                        [ AST.Accessor _ ] ->
+                            Expect.pass
+
+                        other ->
+                            Expect.fail ("Expected one accessor argument, got " ++ Debug.toString other)
+
+                other ->
+                    Expect.fail ("Expected a call, got " ++ Debug.toString other)
 
 
 expectOk : Result (Array (Parser.DeadEnd c e)) a -> Expectation

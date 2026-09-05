@@ -30,6 +30,7 @@ function definitions. Each declaration can have a documentation comment.
 -}
 type alias Declaration =
     { docs : Maybe (SourcePosition.Located String)
+    , start : SourcePosition.Position
     , value : DeclarationValue
     }
 
@@ -94,12 +95,18 @@ spaceParser =
 parser : Parser Context Error Declaration
 parser =
     Parser.succeed
-        (\docs value ->
+        (\docs start value ->
             { docs = docs
+            , start = start
             , value = value
             }
         )
         |> Parser.keep (docParser ExpectedKeyword)
+        -- Where the declaration itself begins, after any documentation comment.
+        -- It cannot be recovered from the declaration's name: `type`,
+        -- `type alias` and `port` all put a keyword first, and a newline
+        -- between the keyword and the name is legal.
+        |> Parser.keep Parser.getPosition
         |> Parser.keep
             (Parser.oneOf
                 [ typeParser

@@ -366,15 +366,19 @@ importLoopParser
 importLoopParser imps =
     Parser.oneOf
         [ Parser.succeed
-            (\moduleName ->
+            (\start moduleName ->
                 SourcePosition.at
-                    { moduleName.start | col = 1 }
+                    start
                     moduleName.end
                     { module_ = moduleName
                     , alias = Nothing
                     , expose = AST.Explicit []
                     }
             )
+            -- The `import` keyword's own position, not the module name's row
+            -- forced to column 1: a newline between the keyword and the name
+            -- is legal, and then the two are not on the same row.
+            |> Parser.keep Parser.getPosition
             |> Parser.skip (Parser.keyword "import" (ExpectedKeyword "import"))
             |> Parser.skip spaceParser
             |> Parser.keep moduleNameParser
@@ -499,7 +503,7 @@ declarationToModuleAlias decl =
         Declaration.Alias v ->
             Just <|
                 SourcePosition.at
-                    { row = v.name.start.row, col = 1 }
+                    decl.start
                     v.type_.end
                     { docs = decl.docs
                     , value = v
@@ -521,7 +525,7 @@ declarationToModuleUnion decl =
             in
             Just <|
                 SourcePosition.at
-                    { row = v.name.start.row, col = 1 }
+                    decl.start
                     endPos
                     { docs = decl.docs
                     , value = v
@@ -537,7 +541,7 @@ declarationToModulePort decl =
         Declaration.Port v ->
             Just <|
                 SourcePosition.at
-                    { row = v.name.start.row, col = 1 }
+                    decl.start
                     v.signature.end
                     { docs = decl.docs
                     , value = v
