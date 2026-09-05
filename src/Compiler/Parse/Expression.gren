@@ -517,7 +517,10 @@ whenBranchParser =
     Parser.succeed (\pattern body -> { pattern = pattern, body = body })
         |> Parser.keep (Parser.mapError PatternError Pattern.topLevelParser)
         |> Parser.skip spaceParser
-        |> Parser.skip (Parser.keyword "->" (ExpectedKeyword "->"))
+        -- `token`, not `keyword`: an arrow is punctuation, so there is nothing
+        -- for a word boundary to separate it from. `keyword` refuses when the
+        -- next character is alphanumeric, which rejects `_ ->x`.
+        |> Parser.skip (Parser.token "->" (ExpectedKeyword "->"))
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.lazy (\_ -> parser))
         |> Space.scopeIndentToLineStart

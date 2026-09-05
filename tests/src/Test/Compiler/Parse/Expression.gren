@@ -1897,7 +1897,32 @@ tests =
                                 }
                             )
                 ]
+        , describe "keyword boundaries"
+            [ test "a when branch arrow followed immediately by the body" <| \_ ->
+                -- `->` is punctuation, not a word, so it must not demand a
+                -- non-identifier character after it. Parsed with `keyword`, an
+                -- arrow written tight against its body was rejected — while
+                -- the reference compiler accepts it.
+                Parser.run PE.parser Context.empty "when x is\n    _ ->y"
+                    |> expectOk
+            , test "a lambda argument whose name merely starts with `as`" <| \_ ->
+                Parser.run PE.parser Context.empty "\\x as_ -> as_"
+                    |> expectOk
+            , test "a when branch pattern aliased without parens" <| \_ ->
+                Parser.run PE.parser Context.empty "when x is\n    Just y as whole ->\n        whole"
+                    |> expectOk
+            ]
         ]
+
+
+expectOk : Result (Array (Parser.DeadEnd c e)) a -> Expectation
+expectOk result =
+    when result is
+        Err err ->
+            Expect.fail (Debug.toString err)
+
+        Ok _ ->
+            Expect.pass
 
 
 expectExpression : a -> Result (Array (Parser.DeadEnd c e)) (SourcePosition.Located a) -> Expectation

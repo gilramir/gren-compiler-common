@@ -68,6 +68,25 @@ errorToString error =
 -}
 parser : Parser Context Error AST.Pattern
 parser =
+    withAlias parserNoAlias
+
+
+{-| Accept an optional `as <name>` suffix after a pattern.
+
+Two things it has to get right, both of which used to be wrong:
+
+  - `as` is a keyword, so it needs a word boundary after it. With `token "as"`
+    the parser matched the first two characters of a variable named `as_` and
+    then failed on the `_`, which made `as_` legal as a function's first
+    argument and rejected as its second.
+  - Every pattern that can be aliased has to go through here. `topLevelParser`
+    is the only one that accepts an unparenthesized constructor argument, and
+    it had no alias suffix, so `Just y as whole` in a `when` branch parsed as
+    far as `Just y`.
+
+-}
+withAlias : Parser Context Error AST.Pattern -> Parser Context Error AST.Pattern
+withAlias inner =
     Parser.succeed
         (\pattern alias ->
             when alias is
@@ -80,12 +99,12 @@ parser =
                 Nothing ->
                     pattern
         )
-        |> Parser.keep parserNoAlias
+        |> Parser.keep inner
         |> Parser.skip spaceParser
         |> Parser.keep
             (Parser.oneOf
                 [ Parser.succeed Just
-                    |> Parser.skip (Parser.token "as" (ExpectedKeyword "as"))
+                    |> Parser.skip (Parser.keyword "as" (ExpectedKeyword "as"))
                     |> Parser.skip spaceParser
                     |> Parser.keep (SourcePosition.parser lowerCaseVariable)
                 , Parser.succeed Nothing
@@ -198,6 +217,7 @@ not two.
 -}
 topLevelParser : Parser Context Error AST.Pattern
 topLevelParser =
+    withAlias
     (Parser.oneOf
         [ SourcePosition.parser (numberBy Number.parser)
         , Parser.succeed (\var arg -> { ctor = var, arg = arg })

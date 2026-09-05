@@ -365,6 +365,90 @@ tests =
                                 "MyRecord"
                         }
                     )
+        , describe "as"
+            [ test "an alias whose name merely starts with `as`" <| \_ ->
+                -- The alias suffix used to be `token "as"`, which matches the
+                -- first two characters of `as_` and then fails on the `_`. The
+                -- same name parses when it is not preceded by a pattern, so a
+                -- variable called `as_` was legal as a function's first
+                -- argument and rejected as its second.
+                Parser.run PT.parser Context.empty "x as_"
+                    |> expectPattern (AST.PVar "x")
+            , test "a constructor pattern with an argument can be aliased" <| \_ ->
+                -- `topLevelParser` is the only pattern parser that accepts an
+                -- unparenthesized constructor argument, and it had no alias
+                -- suffix of its own — so `Just y as whole` parsed as far as
+                -- `Just y` and the `when` branch then demanded its `->`.
+                Parser.run PT.topLevelParser Context.empty "Just y as whole"
+                    |> expectPattern
+                        (AST.PAlias
+                            { pattern =
+                                SourcePosition.at
+                                    { row = 1, col = 1 }
+                                    { row = 1, col = 7 }
+                                    (AST.PCtor
+                                        { arg =
+                                            Just <|
+                                                SourcePosition.at
+                                                    { row = 1, col = 6 }
+                                                    { row = 1, col = 7 }
+                                                    (AST.PVar "y")
+                                        , name =
+                                            SourcePosition.at
+                                                { row = 1, col = 1 }
+                                                { row = 1, col = 5 }
+                                                "Just"
+                                        }
+                                    )
+                            , name =
+                                SourcePosition.at
+                                    { row = 1, col = 11 }
+                                    { row = 1, col = 16 }
+                                    "whole"
+                            }
+                        )
+            , test "a bare constructor pattern can be aliased" <| \_ ->
+                Parser.run PT.topLevelParser Context.empty "Nothing as whole"
+                    |> expectPattern
+                        (AST.PAlias
+                            { pattern =
+                                SourcePosition.at
+                                    { row = 1, col = 1 }
+                                    { row = 1, col = 8 }
+                                    (AST.PCtor
+                                        { arg = Nothing
+                                        , name =
+                                            SourcePosition.at
+                                                { row = 1, col = 1 }
+                                                { row = 1, col = 8 }
+                                                "Nothing"
+                                        }
+                                    )
+                            , name =
+                                SourcePosition.at
+                                    { row = 1, col = 12 }
+                                    { row = 1, col = 17 }
+                                    "whole"
+                            }
+                        )
+            , test "an alias is still optional after a constructor pattern" <| \_ ->
+                Parser.run PT.topLevelParser Context.empty "Just y"
+                    |> expectPattern
+                        (AST.PCtor
+                            { arg =
+                                Just <|
+                                    SourcePosition.at
+                                        { row = 1, col = 6 }
+                                        { row = 1, col = 7 }
+                                        (AST.PVar "y")
+                            , name =
+                                SourcePosition.at
+                                    { row = 1, col = 1 }
+                                    { row = 1, col = 5 }
+                                    "Just"
+                            }
+                        )
+            ]
         ]
 
 

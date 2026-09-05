@@ -1016,7 +1016,53 @@ tests =
                     , binops = []
                     , effects = AST.NoEffects
                     }
+        , describe "keyword boundaries"
+            -- The module parser reached for `token` where every other parser
+            -- in the compiler uses `keyword`, so a keyword matched the prefix
+            -- of an ordinary name and then failed on the rest of it.
+            [ test "a declaration whose name starts with `import`" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module MyModule exposing (importantThing)
+
+
+                    importantThing =
+                        1
+                    """
+                    |> expectOk
+            , test "a declaration whose name starts with `port`" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module MyModule exposing (portOfCall)
+
+
+                    portOfCall =
+                        1
+                    """
+                    |> expectOk
+            , test "a declaration whose name starts with `infix`" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module MyModule exposing (infixOf)
+
+
+                    infixOf =
+                        1
+                    """
+                    |> expectOk
+            ]
         ]
+
+
+expectOk : Result (Array (Parser.DeadEnd c e)) a -> Expectation
+expectOk result =
+    when result is
+        Err err ->
+            Expect.fail (Debug.toString err)
+
+        Ok _ ->
+            Expect.pass
+
 
 expect : AST.Module -> Result (Array (Parser.DeadEnd c e)) AST.Module -> Expectation
 expect expected result =

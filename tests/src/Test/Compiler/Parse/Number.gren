@@ -87,6 +87,40 @@ tests =
             , test "When followed by illegal character, it fails" <| \{} ->
                 run "0xABZ"
                     |> expectErr PN.NotANumber
+            , describe "Literals just below 2^53"
+                -- `hexFolder` used to add the raw character code to the
+                -- accumulator and subtract the offset afterwards, so the
+                -- intermediate ran up to 65 past the value being built. Just
+                -- below 2^53 that crosses into the range where float64 has a
+                -- spacing of 2, the intermediate rounds, and the trailing
+                -- subtraction cannot undo it.
+                --
+                -- Every literal here is exactly representable, so the parser
+                -- can and must return it unchanged. The count depends on the
+                -- spelling: 27 uppercase literals were wrong, and 33 lowercase
+                -- ones, because 'a'-'f' carry the larger offset.
+                [ test "the largest literal below 2^53" <| \{} ->
+                    run "0x1FFFFFFFFFFFFF"
+                        |> Expect.equal (Ok (PN.Hex 9007199254740991))
+                , test "a literal that used to round up" <| \{} ->
+                    run "0x1FFFFFFFFFFFCA"
+                        |> Expect.equal (Ok (PN.Hex 9007199254740938))
+                , test "a literal that used to round down" <| \{} ->
+                    run "0x1FFFFFFFFFFFCC"
+                        |> Expect.equal (Ok (PN.Hex 9007199254740940))
+                , test "the same literal in lowercase" <| \{} ->
+                    run "0x1fffffffffffcc"
+                        |> Expect.equal (Ok (PN.Hex 9007199254740940))
+                , test "a lowercase-only failure, where 'a' carries the larger offset" <| \{} ->
+                    run "0x1fffffffffffaa"
+                        |> Expect.equal (Ok (PN.Hex 9007199254740906))
+                , test "2^53 itself" <| \{} ->
+                    run "0x20000000000000"
+                        |> Expect.equal (Ok (PN.Hex 9007199254740992))
+                , test "negated, the sign is applied after the fold" <| \{} ->
+                    run "-0x1FFFFFFFFFFFCA"
+                        |> Expect.equal (Ok (PN.Hex -9007199254740938))
+                ]
             ]
         ]
 

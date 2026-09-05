@@ -204,18 +204,31 @@ hexFolder char acc =
     let
         charCode =
             Char.toCode char
+
+        -- The digit's value, before it touches the accumulator. Adding the raw
+        -- character code and subtracting the offset afterwards would run the
+        -- intermediate up to 65 past the number being built, which just below
+        -- 2^53 crosses into the range where a float64 has a spacing of 2: the
+        -- intermediate rounds, and the trailing subtraction cannot undo it.
+        digit =
+            if charCode >= 48 && charCode <= 57 then
+                -- 0-9
+                charCode - 48
+
+            else if charCode >= 65 && charCode <= 70 then
+                -- A-F
+                charCode - 55
+
+            else if charCode >= 97 && charCode <= 102 then
+                -- a-f
+                charCode - 87
+
+            else
+                -- Unreachable: `hexParser` only chomps hex digits.
+                -1
     in
-    if charCode >= 48 && charCode <= 57 then
-        -- 0-9
-        16 * acc + charCode - 48
-
-    else if charCode >= 65 && charCode <= 70 then
-        -- A-F
-        16 * acc + 10 + charCode - 65
-
-    else if charCode >= 97 && charCode <= 102 then
-        -- a-f
-        16 * acc + 10 + charCode - 97
+    if digit < 0 then
+        acc
 
     else
-        acc
+        16 * acc + digit
