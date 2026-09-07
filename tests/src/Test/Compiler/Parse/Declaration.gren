@@ -204,6 +204,7 @@ tests =
                                     { row = 1, col = 15 }
                                     "Direction"
                             , vars = []
+                            , derives = []
                             , variants =
                                 [ SourcePosition.at
                                     { row = 2, col = 7 }
@@ -250,6 +251,7 @@ tests =
                                     { row = 3, col = 15 }
                                     "Direction"
                             , vars = []
+                            , derives = []
                             , variants =
                                 [ SourcePosition.at
                                     { row = 4, col = 7 }
@@ -294,6 +296,7 @@ tests =
                                     { row = 1, col = 13 }
                                     "a"
                                 ]
+                            , derives = []
                             , variants =
                                 [ SourcePosition.at
                                     { row = 2, col = 7 }
@@ -431,7 +434,8 @@ tests =
                                     "foo"
                             , signature =
                                 Just
-                                    { start =
+                                    { constraints = []
+                                    , start =
                                         { row = 1, col = 1 }
                                     , type_ =
                                         SourcePosition.at
@@ -478,7 +482,8 @@ tests =
                                     "foo"
                             , signature =
                                 Just
-                                    { start =
+                                    { constraints = []
+                                    , start =
                                         { row = 3, col = 1 }
                                     , type_ =
                                         SourcePosition.at
@@ -599,6 +604,7 @@ tests =
                                     { row = 1, col = 9 }
                                     "Foo"
                             , vars = []
+                            , derives = []
                             , variants =
                                 [ SourcePosition.at
                                     { row = 2, col = 5 }

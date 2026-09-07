@@ -1810,19 +1810,22 @@ tests =
                                                     "number"
                                             , args = []
                                             , typeSignature =
-                                                Just <|
-                                                    SourcePosition.at
-                                                        { row = 2, col = 14 }
-                                                        { row = 2, col = 17 }
-                                                        (AST.TType
-                                                            { args = []
-                                                            , name =
-                                                                SourcePosition.at
-                                                                    { row = 2, col = 14 }
-                                                                    { row = 2, col = 17 }
-                                                                    "Int"
-                                                            }
-                                                        )
+                                                Just
+                                                    { constraints = []
+                                                    , type_ =
+                                                        SourcePosition.at
+                                                            { row = 2, col = 14 }
+                                                            { row = 2, col = 17 }
+                                                            (AST.TType
+                                                                { args = []
+                                                                , name =
+                                                                    SourcePosition.at
+                                                                        { row = 2, col = 14 }
+                                                                        { row = 2, col = 17 }
+                                                                        "Int"
+                                                                }
+                                                            )
+                                                    }
                                             , body =
                                                 SourcePosition.at
                                                     { row = 4, col = 9 }

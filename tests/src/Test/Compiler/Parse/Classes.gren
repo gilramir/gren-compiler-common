@@ -1,0 +1,286 @@
+module Test.Compiler.Parse.Classes exposing ( tests )
+
+{-| The four syntactic additions M1b's classes make, in the Gren parser:
+`=>`, `class`, `instance` and `@derive`.
+
+These check the shape rather than the whole tree, because half of what is worth
+testing is what must *not* be read as a class or a context, and a summary makes
+those legible next to each other. The Haskell frontend's `ConstraintSpec`,
+`ClassSpec` and `InstanceSpec` ask the same questions of the same sources.
+-}
+
+import Expect exposing (Expectation)
+import Test exposing (Test, describe, test)
+import String.Parser.Advanced as Parser
+import Compiler.Parse.Declaration as PD
+import Compiler.Parse.Type as PT
+import Compiler.Parse.Context as Context
+import Compiler.Ast.Source as AST
+
+
+tests : Test
+tests =
+    describe "Parse.Classes"
+        [ describe "Constraint contexts"
+            [ test "one constraint" <| \_ ->
+                expectContext [ { class = "Eq", var = "a" } ] "Eq a => a -> a -> Bool"
+            , test "several constraints, parenthesized" <| \_ ->
+                expectContext
+                    [ { class = "Eq", var = "a" }, { class = "Ord", var = "b" } ]
+                    "(Eq a, Ord b) => a -> b -> Bool"
+            , test "a qualified class name" <| \_ ->
+                expectContext [ { class = "Basics.Eq", var = "a" } ] "Basics.Eq a => a -> Bool"
+            , test "redundant parentheses around one constraint are not recorded" <| \_ ->
+                expectContext [ { class = "Eq", var = "a" } ] "(Eq a) => a -> Bool"
+            ]
+        , describe "Things that are not contexts"
+            [ test "a type that happens to look like a constraint" <| \_ ->
+                expectContext [] "Eq a"
+            , test "a constraint-shaped argument to a function type" <| \_ ->
+                expectContext [] "Eq a -> Bool"
+            , test "a parenthesized function type" <| \_ ->
+                expectContext [] "(a -> b) -> a -> b"
+            , test "a record type" <| \_ ->
+                expectContext [] "{ n : Int } -> Int"
+            ]
+        , describe "Layout (D116)"
+            [ test "an expanded context, with => in the column -> uses" <| \_ ->
+                expectDecl
+                    (AValue "f")
+                    """
+                    f :
+                        ( Eq a
+                        , Ord b
+                        )
+                        => a
+                        -> b
+                        -> Bool
+                    f _ _ =
+                        True
+                    """
+            , test "an expanded context with one constraint and no parentheses" <| \_ ->
+                expectDecl
+                    (AValue "f")
+                    """
+                    f :
+                        Eq a
+                        => a
+                        -> Bool
+                    f _ =
+                        True
+                    """
+            ]
+        , describe "Class declarations"
+            [ test "one method" <| \_ ->
+                expectDecl
+                    (AClass { name = "Inspect", var = "a", methods = [ "inspect" ] })
+                    """
+                    class Inspect a where
+                        inspect : a -> String
+                    """
+            , test "several methods" <| \_ ->
+                expectDecl
+                    (AClass { name = "Eq", var = "a", methods = [ "eq", "ne" ] })
+                    """
+                    class Eq a where
+                        eq : a -> a -> Bool
+                        ne : a -> a -> Bool
+                    """
+            , test "the body ends where the indentation does" <| \_ ->
+                -- A top-level annotation below the class is not another method,
+                -- however well it parses as one.
+                expectDecl
+                    (AClass { name = "Eq", var = "a", methods = [ "eq" ] })
+                    """
+                    class Eq a where
+                        eq : a -> a -> Bool
+                    x : Int
+                    """
+            , test "a method whose own annotation carries a context" <| \_ ->
+                expectDecl
+                    (AClass { name = "Sortable", var = "a", methods = [ "sortBy" ] })
+                    """
+                    class Sortable a where
+                        sortBy : Ord b => (a -> b) -> a -> a
+                    """
+            ]
+        , describe "`class` and `instance` are still identifiers"
+            [ test "a value named class" <| \_ ->
+                expectDecl (AValue "class")
+                    """
+                    class : String -> String
+                    class name =
+                        name
+                    """
+            , test "a value named class with no annotation" <| \_ ->
+                expectDecl (AValue "class")
+                    """
+                    class =
+                        1
+                    """
+            , test "a value named instance" <| \_ ->
+                expectDecl (AValue "instance")
+                    """
+                    instance =
+                        1
+                    """
+            , test "a type alias whose field is named class" <| \_ ->
+                expectDecl (AnAlias "Attr")
+                    """
+                    type alias Attr =
+                        { class : String }
+                    """
+            ]
+        , describe "Instance declarations"
+            [ test "one method" <| \_ ->
+                expectDecl
+                    (AnInstance { hasContext = False, methods = [ "inspect" ] })
+                    """
+                    instance Inspect Path where
+                        inspect path =
+                            "a path"
+                    """
+            , test "a context and several methods" <| \_ ->
+                expectDecl
+                    (AnInstance { hasContext = True, methods = [ "eq", "ne" ] })
+                    """
+                    instance Eq a => Eq (Array a) where
+                        eq p q =
+                            True
+
+                        ne p q =
+                            False
+                    """
+            ]
+        , describe "@derive"
+            [ test "on a custom type" <| \_ ->
+                expectDecl
+                    (AUnion { name = "UserId", derives = [ "Eq", "Ord", "Inspect" ] })
+                    """
+                    @derive(Eq, Ord, Inspect)
+                    type UserId
+                        = UserId Int
+                    """
+            , test "a custom type without it derives nothing here" <| \_ ->
+                expectDecl
+                    (AUnion { name = "UserId", derives = [] })
+                    """
+                    type UserId
+                        = UserId Int
+                    """
+            , test "on a type alias is refused" <| \_ ->
+                expectRefused
+                    """
+                    @derive(Eq)
+                    type alias Attr =
+                        { class : String }
+                    """
+            , test "on a value is refused" <| \_ ->
+                expectRefused
+                    """
+                    @derive(Eq)
+                    x : Int
+                    x =
+                        1
+                    """
+            , test "the declaration has to be on the line below it" <| \_ ->
+                expectRefused "@derive(Eq) type UserId = UserId Int\n"
+            , test "an attribute that is not `derive` is refused" <| \_ ->
+                expectRefused
+                    """
+                    @extern
+                    type UserId
+                        = UserId Int
+                    """
+            ]
+        ]
+
+
+-- SUMMARIES
+
+
+type Kind
+    = AClass { name : String, var : String, methods : Array String }
+    | AnInstance { hasContext : Bool, methods : Array String }
+    | AUnion { name : String, derives : Array String }
+    | AnAlias String
+    | AValue String
+    | Other
+
+
+expectDecl : Kind -> String -> Expectation
+expectDecl expected source =
+    when Parser.run PD.parser Context.empty source is
+        Err err ->
+            Expect.fail (Debug.toString err)
+
+        Ok decl ->
+            Expect.equal expected (summarize decl.value)
+
+
+expectRefused : String -> Expectation
+expectRefused source =
+    when Parser.run PD.parser Context.empty source is
+        Err _ ->
+            Expect.pass
+
+        Ok decl ->
+            Expect.fail ("Expected this to be refused, but it parsed as " ++ Debug.toString (summarize decl.value))
+
+
+summarize : PD.DeclarationValue -> Kind
+summarize value =
+    when value is
+        PD.Class c ->
+            AClass
+                { name = c.name.value
+                , var = c.var.value
+                , methods = Array.map (\m -> m.value.name.value) c.methods
+                }
+
+        PD.Instance i ->
+            AnInstance
+                { hasContext = not (Array.isEmpty i.constraints)
+                , methods = Array.map (\m -> m.value.name.value) i.methods
+                }
+
+        PD.Union u ->
+            AUnion
+                { name = u.name.value
+                , derives = Array.map .value u.derives
+                }
+
+        PD.Alias a ->
+            AnAlias a.name.value
+
+        PD.Value v ->
+            AValue v.name.value
+
+        _ ->
+            Other
+
+
+-- CONTEXTS
+
+
+expectContext : Array { class : String, var : String } -> String -> Expectation
+expectContext expected source =
+    when Parser.run PT.annotation Context.empty source is
+        Err err ->
+            Expect.fail (Debug.toString err)
+
+        Ok ann ->
+            Expect.equal expected (Array.map flatten ann.constraints)
+
+
+flatten : AST.Constraint -> { class : String, var : String }
+flatten c =
+    { class =
+        when c.qualifier is
+            Just qualifier ->
+                qualifier ++ "." ++ c.class.value
+
+            Nothing ->
+                c.class.value
+    , var = c.var.value
+    }

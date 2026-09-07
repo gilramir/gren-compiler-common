@@ -41,6 +41,8 @@ type DeclarationValue
     = Alias AST.Alias
     | Union AST.Union
     | Value AST.Value
+    | Class AST.Class
+    | Instance AST.Instance
     | Port AST.Port
 
 
@@ -54,6 +56,10 @@ type Error
     | ExprError Expr.Error
     | SpaceError Space.Error
     | IndentationError
+    | UnknownAttribute String
+    | AttributeNotOnCustomType
+    | AttributeNeedsFreshLine
+    | InstanceMethodHasSignature String
 
 
 {-| Returns a human-readable description of an `Error`.
@@ -82,6 +88,18 @@ errorToString error =
         IndentationError ->
             "Expected more indentation than above line"
 
+        UnknownAttribute name ->
+            "Unknown attribute '@" ++ name ++ "'"
+
+        AttributeNotOnCustomType ->
+            "Expected a custom type after this attribute"
+
+        AttributeNeedsFreshLine ->
+            "Expected the declaration on the line after this attribute"
+
+        InstanceMethodHasSignature name ->
+            "'" ++ name ++ "' has a type annotation, and a method of an instance takes none"
+
 
 spaceParser : Parser Context Error {}
 spaceParser =
@@ -95,10 +113,10 @@ spaceParser =
 parser : Parser Context Error Declaration
 parser =
     Parser.succeed
-        (\docs start value ->
+        (\docs start derives ->
             { docs = docs
             , start = start
-            , value = value
+            , derives = derives
             }
         )
         |> Parser.keep (docParser ExpectedKeyword)
@@ -107,10 +125,35 @@ parser =
         -- `type alias` and `port` all put a keyword first, and a newline
         -- between the keyword and the name is legal.
         |> Parser.keep Parser.getPosition
-        |> Parser.keep
-            (Parser.oneOf
-                [ typeParser
+        |> Parser.keep deriveParser
+        |> Parser.andThen declarationValueParser
+
+
+declarationValueParser : { docs : Maybe (SourcePosition.Located String), start : SourcePosition.Position, derives : Array (SourcePosition.Located String) } -> Parser Context Error Declaration
+declarationValueParser { docs, start, derives } =
+    let
+        finish value =
+            { docs = docs
+            , start = start
+            , value = value
+            }
+    in
+    -- `@derive` says which classes an abstract type derives, so the declaration
+    -- it is attached to has to be a custom type. Anything else is a misplaced
+    -- attribute rather than a declaration that quietly ignores it.
+    if not (Array.isEmpty derives) then
+        Parser.oneOf
+            [ typeParser derives
+            , Parser.problem AttributeNotOnCustomType
+            ]
+            |> Parser.map finish
+
+    else
+        Parser.oneOf
+                [ typeParser []
                 , portParser
+                , classParser
+                , instanceParser
                 , Expr.letDefNamedParser
                     |> Parser.mapError ExprError
                     |> Parser.map
@@ -120,8 +163,9 @@ parser =
                                 , signature =
                                     Maybe.map
                                         (\t ->
-                                            { start = def.start
-                                            , type_ = t
+                                            { start = start
+                                            , constraints = t.constraints
+                                            , type_ = t.type_
                                             }
                                         )
                                         def.value.typeSignature
@@ -130,6 +174,231 @@ parser =
                                 }
                         )
                 ]
+                |> Parser.map finish
+
+
+-- ATTRIBUTES
+
+
+{-| `@derive(Eq, Ord, Inspect)` on the line before a custom type.
+
+An attribute follows the documentation comment and precedes the declaration.
+This is the first one; `@extern` is the other customer and will land beside it.
+-}
+deriveParser : Parser Context Error (Array (SourcePosition.Located String))
+deriveParser =
+    Parser.oneOf
+        [ Parser.succeed identity
+            |> Parser.skip (Parser.backtrackable (Parser.chompChar '@' (ExpectedChar '@')))
+            |> Parser.keep (SourcePosition.parser lowerCaseVariable)
+            |> Parser.andThen
+                (\name ->
+                    if name.value /= "derive" then
+                        Parser.problem (UnknownAttribute name.value)
+
+                    else
+                        Parser.succeed (\classes closeRow declRow -> { classes = classes, closeRow = closeRow, declRow = declRow })
+                            |> Parser.skip spaceParser
+                            |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
+                            |> Parser.skip spaceParser
+                            |> Parser.keep (Parser.loop [] deriveLoopParser)
+                            |> Parser.keep Parser.getRow
+                            |> Parser.skip spaceParser
+                            |> Parser.keep Parser.getRow
+                            |> Parser.andThen
+                                (\{ classes = classes, closeRow = closeRow, declRow = declRow } ->
+                                    -- The declaration goes on the row below the
+                                    -- attribute. The Haskell front end requires
+                                    -- a fresh line here too, and the two parsers
+                                    -- have to accept the same language.
+                                    if declRow <= closeRow then
+                                        Parser.problem AttributeNeedsFreshLine
+
+                                    else
+                                        Parser.succeed classes
+                                )
+                )
+        , Parser.succeed []
+        ]
+
+
+deriveLoopParser : Array (SourcePosition.Located String) -> Parser Context Error (Parser.Step (Array (SourcePosition.Located String)) (Array (SourcePosition.Located String)))
+deriveLoopParser classes =
+    Parser.succeed (\class_ step -> step (Array.pushLast class_ classes))
+        |> Parser.keep (SourcePosition.parser upperCaseVariable)
+        |> Parser.skip spaceParser
+        |> Parser.keep
+            (Parser.oneOf
+                [ Parser.succeed Parser.Loop
+                    |> Parser.skip (Parser.chompChar ',' (ExpectedChar ','))
+                    |> Parser.skip spaceParser
+                , Parser.succeed Parser.Done
+                    |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+                ]
+            )
+
+
+-- CLASSES
+
+
+{-| `class Eq a where` and the annotations under it.
+
+`class` is a contextual keyword rather than a reserved word, so the head —
+`class`, space, an upper-case name — is `backtrackable`: anything else is a
+value named `class`, which `Html.Attributes` and `Svg.Attributes` both are.
+-}
+classParser : Parser Context Error DeclarationValue
+classParser =
+    Parser.succeed
+        (\name var methods ->
+            Class
+                { name = name
+                , var = var
+                , methods = methods
+                }
+        )
+        |> Parser.keep
+            (Parser.backtrackable
+                (Parser.succeed identity
+                    |> Parser.skip (Variable.keyword "class" (ExpectedKeyword "class"))
+                    |> Parser.skip spaceParser
+                    |> Parser.keep (SourcePosition.parser upperCaseVariable)
+                )
+            )
+        |> Parser.skip spaceParser
+        |> Parser.keep (SourcePosition.parser lowerCaseVariable)
+        |> Parser.skip spaceParser
+        |> Parser.skip (Variable.keyword "where" (ExpectedKeyword "where"))
+        |> Parser.skip spaceParser
+        |> Parser.keep (blockParser classMethodParser)
+
+
+{-| The members of a `class` or `instance` body: an indented block, every
+member starting in the same column as the first.
+
+The column rule is what ends the block. Without it the loop keeps reading
+whatever follows the declaration — a top-level `x : Int` parses perfectly well
+as another class method — and the declaration below silently becomes a member
+of the one above it. The Haskell front end says the same thing with
+`Space.checkAligned`.
+-}
+blockParser : Parser Context Error a -> Parser Context Error (Array a)
+blockParser memberParser =
+    Parser.getCol
+        |> Parser.andThen
+            (\bodyCol ->
+                if bodyCol <= 1 then
+                    Parser.problem IndentationError
+
+                else
+                    Space.scopeIndentToLineStart memberParser
+                        |> Parser.andThen
+                            (\firstMember ->
+                                Parser.succeed identity
+                                    |> Parser.skip spaceParser
+                                    |> Parser.keep
+                                        (Parser.loop [ firstMember ] (blockLoopParser bodyCol memberParser))
+                            )
+            )
+
+
+blockLoopParser : Int -> Parser Context Error a -> Array a -> Parser Context Error (Parser.Step (Array a) (Array a))
+blockLoopParser bodyCol memberParser members =
+    Parser.oneOf
+        [ Parser.succeed
+            (\member -> Parser.Loop (Array.pushLast member members))
+            |> Parser.keep
+                (Parser.backtrackable
+                    (Parser.succeed identity
+                        |> Parser.skip (atColumn bodyCol)
+                        |> Parser.keep (Space.scopeIndentToLineStart memberParser)
+                    )
+                )
+            |> Parser.skip spaceParser
+        , Parser.succeed (Parser.Done members)
+        ]
+
+
+atColumn : Int -> Parser Context Error {}
+atColumn col =
+    Parser.getCol
+        |> Parser.andThen
+            (\actual ->
+                if actual == col then
+                    Parser.succeed {}
+
+                else
+                    Parser.problem IndentationError
+            )
+
+
+{-| A method's own line sets the indent for its annotation, so a type that runs
+past the end of the line still parses and the next method at the same column
+still ends it. `Space.scopeIndentToLineStart` is what `let` already does for
+its definitions.
+-}
+classMethodParser : Parser Context Error (SourcePosition.Located AST.ClassMethod)
+classMethodParser =
+    Parser.succeed
+        (\name signature ->
+            SourcePosition.at
+                name.start
+                signature.type_.end
+                { name = name
+                , signature = signature
+                }
+        )
+        |> Parser.keep (SourcePosition.parser lowerCaseVariable)
+        |> Parser.skip spaceParser
+        |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
+        |> Parser.skip spaceParser
+        |> Parser.keep (Parser.mapError TypeError Type.annotation)
+
+
+-- INSTANCES
+
+
+{-| `instance Eq a => Eq (Array a) where` and the definitions under it.
+
+The head is parsed as an annotation, which is what it is: an optional context
+and then a type. Whether that type's head names a class is a question for the
+environment rather than for the parser.
+-}
+instanceParser : Parser Context Error DeclarationValue
+instanceParser =
+    Parser.succeed
+        (\head methods ->
+            Instance
+                { constraints = head.constraints
+                , head = head.type_
+                , methods = methods
+                }
+        )
+        |> Parser.keep
+            (Parser.backtrackable
+                (Parser.succeed identity
+                    |> Parser.skip (Variable.keyword "instance" (ExpectedKeyword "instance"))
+                    |> Parser.skip spaceParser
+                    |> Parser.keep (Parser.mapError TypeError Type.annotation)
+                )
+            )
+        |> Parser.skip (Variable.keyword "where" (ExpectedKeyword "where"))
+        |> Parser.skip spaceParser
+        |> Parser.keep (blockParser instanceMethodParser)
+
+
+instanceMethodParser : Parser Context Error (SourcePosition.Located AST.DefineRecord)
+instanceMethodParser =
+    Expr.letDefNamedParser
+        |> Parser.mapError ExprError
+        |> Parser.andThen
+            (\def ->
+                when def.value.typeSignature is
+                    Just _ ->
+                        Parser.problem (InstanceMethodHasSignature def.value.name.value)
+
+                    Nothing ->
+                        Parser.succeed def
             )
 
 
@@ -181,12 +450,26 @@ docParser toErr =
         ]
 
 
-typeParser : Parser Context Error DeclarationValue
-typeParser =
+typeParser : Array (SourcePosition.Located String) -> Parser Context Error DeclarationValue
+typeParser derives =
     Parser.succeed identity
         |> Parser.skip (Variable.keyword "type" (ExpectedKeyword "type"))
         |> Parser.skip spaceParser
-        |> Parser.keep (Parser.oneOf [ aliasParser, unionParser ])
+        |> Parser.keep
+            (Parser.oneOf
+                [ -- A type alias is transparent, so whatever it stands for
+                  -- already derives structurally and `@derive` on one is a
+                  -- redundancy rather than a no-op.
+                  if Array.isEmpty derives then
+                    aliasParser
+
+                  else
+                    Parser.succeed identity
+                        |> Parser.skip (Parser.backtrackable (Variable.keyword "alias" (ExpectedKeyword "alias")))
+                        |> Parser.keep (Parser.problem AttributeNotOnCustomType)
+                , unionParser derives
+                ]
+            )
 
 
 aliasParser : Parser Context Error DeclarationValue
@@ -220,14 +503,15 @@ typeArgLoopParser vars =
         ]
 
 
-unionParser : Parser Context Error DeclarationValue
-unionParser =
+unionParser : Array (SourcePosition.Located String) -> Parser Context Error DeclarationValue
+unionParser derives =
     Parser.succeed
         (\name vars variants ->
             Union
                 { name = name
                 , vars = vars
                 , variants = variants
+                , derives = derives
                 }
         )
         |> Parser.keep (SourcePosition.parser upperCaseVariable)

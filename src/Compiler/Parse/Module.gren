@@ -84,6 +84,12 @@ parser =
                 values =
                     Array.mapAndKeepJust declarationToModuleValue decls
 
+                classes =
+                    Array.mapAndKeepJust declarationToModuleClass decls
+
+                instances =
+                    Array.mapAndKeepJust declarationToModuleInstance decls
+
                 unions =
                     Array.mapAndKeepJust declarationToModuleUnion decls
 
@@ -98,6 +104,8 @@ parser =
             , docs = docs
             , imports = imports
             , values = values
+            , classes = classes
+            , instances = instances
             , unions = unions
             , aliases = aliases
             , binops = binops
@@ -491,6 +499,50 @@ declarationToModuleValue decl =
                 SourcePosition.at
                     start
                     v.body.end
+                    { docs = decl.docs
+                    , value = v
+                    }
+
+        _ ->
+            Nothing
+
+
+declarationToModuleClass : Declaration -> Maybe (AST.ModuleDeclaration AST.Class)
+declarationToModuleClass decl =
+    when decl.value is
+        Declaration.Class v ->
+            let
+                endPos =
+                    Array.last v.methods
+                        |> Maybe.map .end
+                        |> Maybe.withDefault v.var.end
+            in
+            Just <|
+                SourcePosition.at
+                    decl.start
+                    endPos
+                    { docs = decl.docs
+                    , value = v
+                    }
+
+        _ ->
+            Nothing
+
+
+declarationToModuleInstance : Declaration -> Maybe (AST.ModuleDeclaration AST.Instance)
+declarationToModuleInstance decl =
+    when decl.value is
+        Declaration.Instance v ->
+            let
+                endPos =
+                    Array.last v.methods
+                        |> Maybe.map .end
+                        |> Maybe.withDefault v.head.end
+            in
+            Just <|
+                SourcePosition.at
+                    decl.start
+                    endPos
                     { docs = decl.docs
                     , value = v
                     }

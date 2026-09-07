@@ -28,6 +28,8 @@ tests =
                     , docs = Nothing
                     , imports = []
                     , values = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops = []
@@ -76,6 +78,8 @@ tests =
                     , docs = Nothing
                     , imports = []
                     , values = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops = []
@@ -96,6 +100,8 @@ tests =
                     , docs = Nothing
                     , imports = []
                     , values = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops = []
@@ -116,6 +122,8 @@ tests =
                     , docs = Nothing
                     , imports = []
                     , values = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops = []
@@ -142,6 +150,8 @@ tests =
                     , docs = Nothing
                     , imports = []
                     , values = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops = []
@@ -168,6 +178,8 @@ tests =
                     , docs = Nothing
                     , imports = []
                     , values = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops = []
@@ -208,6 +220,8 @@ tests =
                             " The documentation for MyModule\n"
                     , imports = []
                     , values = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops = []
@@ -242,6 +256,8 @@ tests =
                             }
                         ]
                     , values = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops = []
@@ -276,6 +292,8 @@ tests =
                             }
                         ]
                     , values = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops = []
@@ -332,6 +350,8 @@ tests =
                             }
                         ]
                 , values = []
+                , classes = []
+                , instances = []
                 , unions = []
                 , aliases = []
                 , binops = []
@@ -387,6 +407,8 @@ tests =
                         }
                     ]
                 , values = []
+                , classes = []
+                , instances = []
                 , unions = []
                 , aliases = []
                 , binops = []
@@ -411,6 +433,8 @@ tests =
                     , docs = Nothing
                     , imports = []
                     , values = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops =
@@ -482,7 +506,8 @@ tests =
                                           "num"
                                   , signature =
                                       Just
-                                          { start =
+                                          { constraints = []
+                                          , start =
                                               { row = 3, col = 1 }
                                           , type_ =
                                               SourcePosition.at
@@ -507,6 +532,8 @@ tests =
                                   }
                              }
                           ]
+                      , classes = []
+                      , instances = []
                       , unions =
                           [ SourcePosition.at
                               { row = 11, col = 1 }
@@ -519,6 +546,7 @@ tests =
                                           { row = 11, col = 12 }
                                           "Choice"
                                   , vars = []
+                                  , derives = []
                                   , variants =
                                       [ SourcePosition.at
                                           { row = 12, col = 5 }
@@ -689,6 +717,8 @@ tests =
                     , imports = []
                     , aliases = []
                     , binops = []
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , effects = AST.NoEffects
                     , values =
@@ -704,7 +734,8 @@ tests =
                                             "foo"
                                     , signature =
                                         Just
-                                            { start =
+                                            { constraints = []
+                                            , start =
                                                 { row = 3, col = 1 }
                                             , type_ =
                                                 SourcePosition.at
@@ -807,7 +838,8 @@ tests =
                                             "bar"
                                     , signature =
                                         Just
-                                            { start =
+                                            { constraints = []
+                                            , start =
                                                 { row = 10, col = 1 }
                                             , type_ =
                                                 SourcePosition.at
@@ -920,7 +952,8 @@ tests =
                                         "add"
                                 , signature =
                                     Just
-                                        { start =
+                                        { constraints = []
+                                        , start =
                                             { row = 8, col = 1 }
                                         , type_ =
                                             SourcePosition.at
@@ -1011,6 +1044,8 @@ tests =
                                 }
                             }
                         ]
+                    , classes = []
+                    , instances = []
                     , unions = []
                     , aliases = []
                     , binops = []

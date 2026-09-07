@@ -13,10 +13,15 @@ module Compiler.Ast.Source exposing
     , Type
     , Type_ (..)
     , TRecordField
+    , Annotation
+    , Constraint
     , Alias
     , Union
     , UnionVariant
     , Value
+    , Class
+    , ClassMethod
+    , Instance
     , Port
     , Module
     , ModuleDeclaration
@@ -32,7 +37,7 @@ module Compiler.Ast.Source exposing
 
 {-| The Abstract Syntax Tree (AST) of Gren.
 
-@docs Expression, Expression_, VarType, IfBranch, WhenBranch, RecordField, Def, DefineRecord, Pattern, Pattern_, PRecordField, Type, Type_, TRecordField, Alias, Union, UnionVariant, Value, Port, Module, ModuleDeclaration, Exposing, Exposed, Privacy, Import, Effects, Manager, Infix, BinopAssociativity
+@docs Expression, Expression_, VarType, IfBranch, WhenBranch, RecordField, Def, DefineRecord, Pattern, Pattern_, PRecordField, Type, Type_, TRecordField, Annotation, Constraint, Alias, Union, UnionVariant, Value, Class, ClassMethod, Instance, Port, Module, ModuleDeclaration, Exposing, Exposed, Privacy, Import, Effects, Manager, Infix, BinopAssociativity
 
 -}
 
@@ -152,7 +157,7 @@ type alias DefineRecord =
     { name : SourcePosition.Located String
     , args : Array Pattern
     , body : Expression
-    , typeSignature : Maybe Type
+    , typeSignature : Maybe Annotation
     }
 
 
@@ -242,6 +247,29 @@ type alias TRecordField =
     }
 
 
+{-| A type, and the constraints qualifying it.
+
+A constraint is not part of a type, it qualifies one, so it lives beside the
+`Type` rather than inside `Type_`. An empty `constraints` array is the only way
+to say "unqualified": there is no empty context to confuse it with, because
+`() =>` does not parse.
+-}
+type alias Annotation =
+    { constraints : Array Constraint
+    , type_ : Type
+    }
+
+
+{-| A class applied to a type variable, and only to a variable: `Eq a` is a
+constraint and `Eq (Array a)` is an instance head.
+-}
+type alias Constraint =
+    { qualifier : Maybe String
+    , class : SourcePosition.Located String
+    , var : SourcePosition.Located String
+    }
+
+
 -- Declarations
 
 {-|
@@ -259,6 +287,7 @@ type alias Union =
   { name : SourcePosition.Located String
   , vars : Array (SourcePosition.Located String)
   , variants : Array (SourcePosition.Located UnionVariant)
+  , derives : Array (SourcePosition.Located String)
   }
 
 
@@ -277,10 +306,47 @@ type alias Value =
   , signature :
     Maybe
       { start : SourcePosition.Position
+      , constraints : Array Constraint
       , type_ : SourcePosition.Located Type_
       }
   , args : Array Pattern
   , body : Expression
+  }
+
+
+{-| `class Eq a where` and the annotations under it.
+
+Methods are annotations and nothing else. A default implementation would be a
+decision the language has not taken, and there is no shape here to put one in.
+-}
+type alias Class =
+  { name : SourcePosition.Located String
+  , var : SourcePosition.Located String
+  , methods : Array (SourcePosition.Located ClassMethod)
+  }
+
+
+{-|
+-}
+type alias ClassMethod =
+  { name : SourcePosition.Located String
+  , signature : Annotation
+  }
+
+
+{-| `instance Eq a => Eq (Array a) where` and the definitions under it.
+
+The head is kept as the `Type` it was written as rather than split into a class
+and an argument: `Eq (Array a)` is a type expression whether or not `Eq` names
+a class, and whether it does is a question for the environment.
+
+Methods take no annotation of their own — the class already gave each one a
+type.
+-}
+type alias Instance =
+  { constraints : Array Constraint
+  , head : Type
+  , methods : Array (SourcePosition.Located DefineRecord)
   }
 
 
@@ -302,6 +368,8 @@ type alias Module =
   , docs : Maybe (SourcePosition.Located String)
   , imports : Array (SourcePosition.Located Import)
   , values : Array (ModuleDeclaration Value)
+  , classes : Array (ModuleDeclaration Class)
+  , instances : Array (ModuleDeclaration Instance)
   , unions : Array (ModuleDeclaration Union)
   , aliases : Array (ModuleDeclaration Alias)
   , binops : Array (SourcePosition.Located Infix)

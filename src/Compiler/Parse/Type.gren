@@ -1,13 +1,14 @@
 module Compiler.Parse.Type exposing
     ( Error (..)
     , expression
+    , annotation
     , errorToString
     )
 
 
 {-| This module provides parsers for Gren type expressions.
 
-@docs expression, Error, errorToString
+@docs expression, annotation, Error, errorToString
 -}
 
 
@@ -53,6 +54,90 @@ errorToString error =
 spaceParser : Parser Context Error {}
 spaceParser =
     Parser.mapError SpaceError Space.parser
+
+
+{-| Use this to parse an annotation: a type, optionally qualified by a
+constraint context.
+
+    String.Parser.run annotation Compiler.Parse.Context.empty source
+
+A context has to be recognized before it can be parsed, because both of its
+shapes are already something else. `Eq a` is a perfectly good type, and `(`
+opens a parenthesized type as readily as a constraint list; the only thing that
+separates them is the `=>` several tokens later. So the whole context is
+`backtrackable`, and an annotation with no context costs one failed attempt
+over a handful of tokens.
+-}
+annotation : Parser Context Error AST.Annotation
+annotation =
+    Parser.succeed (\constraints tipe -> { constraints = constraints, type_ = tipe })
+        |> Parser.keep
+            (Parser.oneOf
+                [ Parser.backtrackable context
+                , Parser.succeed []
+                ]
+            )
+        |> Parser.keep expression
+
+
+context : Parser Context Error (Array AST.Constraint)
+context =
+    Parser.succeed identity
+        |> Parser.keep
+            (Parser.oneOf
+                [ Parser.succeed identity
+                    |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
+                    |> Parser.skip spaceParser
+                    |> Parser.keep (Parser.loop [] constraintLoopParser)
+                , constraint
+                    |> Parser.map (\one -> [ one ])
+                ]
+            )
+        |> Parser.skip spaceParser
+        |> Parser.skip (Parser.token "=>" (ExpectedString "=>"))
+        |> Parser.skip spaceParser
+
+
+constraintLoopParser : Array AST.Constraint -> Parser Context Error (Parser.Step (Array AST.Constraint) (Array AST.Constraint))
+constraintLoopParser constraints =
+    Parser.succeed (\one step -> step (Array.pushLast one constraints))
+        |> Parser.keep constraint
+        |> Parser.keep
+            (Parser.oneOf
+                [ Parser.succeed Parser.Loop
+                    |> Parser.skip (Parser.chompChar ',' (ExpectedChar ','))
+                    |> Parser.skip spaceParser
+                , Parser.succeed Parser.Done
+                    |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+                ]
+            )
+
+
+constraint : Parser Context Error AST.Constraint
+constraint =
+    Parser.succeed
+        (\start var classEnd varStart name varEnd ->
+            when var is
+                Variable.Unqualified className ->
+                    { qualifier = Nothing
+                    , class = SourcePosition.at start classEnd className
+                    , var = SourcePosition.at varStart varEnd name
+                    }
+
+                Variable.Qualified { module_, name = className } ->
+                    { qualifier = Just module_
+                    , class = SourcePosition.at start classEnd className
+                    , var = SourcePosition.at varStart varEnd name
+                    }
+        )
+        |> Parser.keep Parser.getPosition
+        |> Parser.keep (Parser.mapError VariableError Variable.foreignUpper)
+        |> Parser.keep Parser.getPosition
+        |> Parser.skip spaceParser
+        |> Parser.keep Parser.getPosition
+        |> Parser.keep (Parser.mapError VariableError Variable.lowerCase)
+        |> Parser.keep Parser.getPosition
+        |> Parser.skip spaceParser
 
 
 {-| Use this to parse type expressions.
