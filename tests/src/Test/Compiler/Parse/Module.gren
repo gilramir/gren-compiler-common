@@ -1050,6 +1050,52 @@ tests =
                         1
                     """
                     |> expectOk
+            -- The other half of a keyword boundary. `String.Parser`'s
+            -- `keyword` decides where a word ends with `Char.isAlphaNum`,
+            -- which is ASCII by contract, so every non-ASCII letter looked
+            -- like the end of the keyword and split the name in two. The
+            -- Haskell parser accepts all three of these, which makes it a
+            -- two-parser divergence rather than a shared limit.
+            , test "a name starting with `type`, continued by a Latin-1 letter" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module MyModule exposing (typeé)
+
+
+                    typeé =
+                        1
+                    """
+                    |> expectOk
+            , test "a name starting with `type`, continued by a BMP letter" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module MyModule exposing (typeｚ)
+
+
+                    typeｚ =
+                        1
+                    """
+                    |> expectOk
+            , test "a name starting with `type`, continued by an astral letter" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module MyModule exposing (type𝐚)
+
+
+                    type𝐚 =
+                        1
+                    """
+                    |> expectOk
+            , test "a name starting with `type`, continued by ASCII" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module MyModule exposing (typez)
+
+
+                    typez =
+                        1
+                    """
+                    |> expectOk
             ]
         , describe "declaration positions"
             -- A declaration's start used to be taken from the row of its

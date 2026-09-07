@@ -104,7 +104,7 @@ withAlias inner =
         |> Parser.keep
             (Parser.oneOf
                 [ Parser.succeed Just
-                    |> Parser.skip (Parser.keyword "as" (ExpectedKeyword "as"))
+                    |> Parser.skip (Variable.keyword "as" (ExpectedKeyword "as"))
                     |> Parser.skip spaceParser
                     |> Parser.keep (SourcePosition.parser lowerCaseVariable)
                 , Parser.succeed Nothing

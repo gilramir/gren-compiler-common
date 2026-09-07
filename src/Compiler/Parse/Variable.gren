@@ -7,6 +7,7 @@ module Compiler.Parse.Variable exposing
     , foreignUpper
     , foreignVar
     , reservedWords
+    , keyword
     , errorToString
     )
 
@@ -14,6 +15,10 @@ module Compiler.Parse.Variable exposing
 {-| This module provides parsers for Gren variables and identifiers.
 
 @docs lowerCase, reservedWords, upperCase, foreignUpper, foreignVar, ForeignVar, foreignVarToString
+
+## Keywords
+
+@docs keyword
 
 ## Errors
 
@@ -253,3 +258,38 @@ isInner char =
         || char == '_'
         || isLowerCaseLetter char
         || isUpperCaseLetter char
+
+
+{-| Parse a keyword, and require that the source does not simply continue into
+a longer name: `type` in `typeOf` is not the keyword.
+
+`String.Parser.Advanced.keyword` already does that, but it decides where a word
+ends with `Char.isAlphaNum`, which is ASCII by contract and is not what a Gren
+identifier is. Every non-ASCII letter therefore looked like the end of the
+keyword, and `typeé`, `typeｚ` and `type𝐚` were each split into a keyword and a
+remainder that then failed to parse — while the reference compiler accepts all
+three. The predicate is not a parameter of that function, so a caller whose
+identifiers reach past ASCII has to bring its own; this is it, over the same
+`isInner` that `lowerCase` and `upperCase` chomp with.
+
+    String.Parser.run (keyword "type" Nope) Compiler.Parse.Context.empty source
+-}
+keyword : String -> x -> Parser Context x {}
+keyword kwd expecting =
+    Parser.succeed (\continues -> continues)
+        |> Parser.skip (Parser.backtrackable (Parser.token kwd expecting))
+        |> Parser.keep
+            (Parser.oneOf
+                [ Parser.backtrackable (Parser.chompIf isInner expecting)
+                    |> Parser.map (\_ -> True)
+                , Parser.succeed False
+                ]
+            )
+        |> Parser.andThen
+            (\continues ->
+                if continues then
+                    Parser.problem expecting
+
+                else
+                    Parser.commit {}
+            )

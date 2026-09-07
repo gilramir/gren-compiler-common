@@ -113,17 +113,19 @@ parser =
                         AST.Ports ports
             }
         )
-        -- Every keyword in this module is matched with `keyword` rather than
-        -- `token`, so that it needs a word boundary after it. With `token`, an
-        -- ordinary declaration named `importantThing` or `infixOf` matched the
-        -- keyword's prefix, committed the branch, and then failed on the rest
-        -- of the name.
+        -- Every keyword in this module is matched with `Variable.keyword`
+        -- rather than `token`, so that it needs a word boundary after it. With
+        -- `token`, an ordinary declaration named `importantThing` or `infixOf`
+        -- matched the keyword's prefix, committed the branch, and then failed
+        -- on the rest of the name. The boundary has to be this module's own —
+        -- `String.Parser`'s ends a word at `Char.isAlphaNum`, which is ASCII,
+        -- and would split `typeé` the same way `token` split `infixOf`.
         |> Parser.keep
             (Parser.oneOf
                 [ Parser.succeed (\name effects -> { name = name, effects = AST.Manager effects })
-                    |> Parser.skip (Parser.keyword "effect" (ExpectedKeyword "effect"))
+                    |> Parser.skip (Variable.keyword "effect" (ExpectedKeyword "effect"))
                     |> Parser.skip spaceParser
-                    |> Parser.skip (Parser.keyword "module" (ExpectedKeyword "module"))
+                    |> Parser.skip (Variable.keyword "module" (ExpectedKeyword "module"))
                     |> Parser.skip spaceParser
                     |> Parser.keep moduleNameParser
                     |> Parser.skip spaceParser
@@ -132,12 +134,12 @@ parser =
                     |> Parser.skip
                         (Parser.oneOf
                             [ Parser.succeed {}
-                                |> Parser.skip (Parser.keyword "port" (ExpectedKeyword "port"))
+                                |> Parser.skip (Variable.keyword "port" (ExpectedKeyword "port"))
                                 |> Parser.skip spaceParser
                             , Parser.succeed {}
                             ]
                         )
-                    |> Parser.skip (Parser.keyword "module" (ExpectedKeyword "module"))
+                    |> Parser.skip (Variable.keyword "module" (ExpectedKeyword "module"))
                     |> Parser.skip spaceParser
                     |> Parser.keep moduleNameParser
                 ]
@@ -166,7 +168,7 @@ moduleNameParser =
 effectParser : Parser Context Error AST.Manager
 effectParser =
     Parser.succeed identity
-        |> Parser.skip (Parser.keyword "where" (ExpectedKeyword "where"))
+        |> Parser.skip (Variable.keyword "where" (ExpectedKeyword "where"))
         |> Parser.skip spaceParser
         |> Parser.skip (Parser.chompChar '{' (ExpectedChar '{'))
         |> Parser.skip spaceParser
@@ -236,7 +238,7 @@ ctorNameParser =
 parseExposingStatement : Parser Context Error AST.Exposing
 parseExposingStatement =
     Parser.succeed identity
-        |> Parser.skip (Parser.keyword "exposing" (ExpectedKeyword "exposing"))
+        |> Parser.skip (Variable.keyword "exposing" (ExpectedKeyword "exposing"))
         |> Parser.skip spaceParser
         |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
         |> Parser.skip spaceParser
@@ -311,11 +313,11 @@ parseAssociativity : Parser Context Error AST.BinopAssociativity
 parseAssociativity =
     Parser.oneOf
         [ Parser.succeed AST.OpALeft
-            |> Parser.skip (Parser.keyword "left" (ExpectedKeyword "left"))
+            |> Parser.skip (Variable.keyword "left" (ExpectedKeyword "left"))
         , Parser.succeed AST.OpARight
-            |> Parser.skip (Parser.keyword "right" (ExpectedKeyword "right"))
+            |> Parser.skip (Variable.keyword "right" (ExpectedKeyword "right"))
         , Parser.succeed AST.OpANone
-            |> Parser.skip (Parser.keyword "non" (ExpectedKeyword "non"))
+            |> Parser.skip (Variable.keyword "non" (ExpectedKeyword "non"))
         ]
 
 
@@ -344,7 +346,7 @@ parseOperatorDeclaration =
             }
     )
         |> Parser.keep Parser.getPosition
-        |> Parser.skip (Parser.keyword "infix" (ExpectedKeyword "infix"))
+        |> Parser.skip (Variable.keyword "infix" (ExpectedKeyword "infix"))
         |> Parser.skip spaceParser
         |> Parser.keep parseAssociativity
         |> Parser.skip spaceParser
@@ -379,7 +381,7 @@ importLoopParser imps =
             -- forced to column 1: a newline between the keyword and the name
             -- is legal, and then the two are not on the same row.
             |> Parser.keep Parser.getPosition
-            |> Parser.skip (Parser.keyword "import" (ExpectedKeyword "import"))
+            |> Parser.skip (Variable.keyword "import" (ExpectedKeyword "import"))
             |> Parser.skip spaceParser
             |> Parser.keep moduleNameParser
             |> Parser.skip spaceParser
@@ -396,7 +398,7 @@ importLoopParser imps =
                                         }
                                 }
                             )
-                            |> Parser.skip (Parser.keyword "as" (ExpectedKeyword "as"))
+                            |> Parser.skip (Variable.keyword "as" (ExpectedKeyword "as"))
                             |> Parser.skip spaceParser
                             |> Parser.keep moduleNameParser
                             |> Parser.skip spaceParser

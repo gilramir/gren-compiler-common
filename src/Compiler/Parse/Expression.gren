@@ -303,7 +303,7 @@ letParser =
                 )
         )
         |> Parser.keep Parser.getPosition
-        |> Parser.skip (Parser.keyword "let" (ExpectedKeyword "let"))
+        |> Parser.skip (Variable.keyword "let" (ExpectedKeyword "let"))
         |> Parser.skip spaceParser
         |> Parser.keep letDefParser
         |> Parser.skip spaceParser
@@ -420,7 +420,7 @@ letDefLoopParser : Array (SourcePosition.Located AST.Def) -> Parser Context Erro
 letDefLoopParser defs =
     Parser.oneOf
         [ Parser.succeed (Parser.Done defs)
-            |> Parser.skip (Parser.keyword "in" (ExpectedKeyword "in"))
+            |> Parser.skip (Variable.keyword "in" (ExpectedKeyword "in"))
         , Parser.succeed (\def -> Parser.Loop <| Array.pushLast def defs)
             |> Parser.keep letDefParser
             |> Parser.skip spaceParser
@@ -444,15 +444,15 @@ ifParser =
 ifBranchParser : Parser Context Error AST.IfBranch
 ifBranchParser =
     Parser.succeed (\test body -> { test = test, body = body })
-        |> Parser.skip (Parser.keyword "if" (ExpectedKeyword "if"))
+        |> Parser.skip (Variable.keyword "if" (ExpectedKeyword "if"))
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.lazy (\_ -> parser))
         |> Parser.skip spaceParser
-        |> Parser.skip (Parser.keyword "then" (ExpectedKeyword "then"))
+        |> Parser.skip (Variable.keyword "then" (ExpectedKeyword "then"))
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.lazy (\_ -> parser))
         |> Parser.skip spaceParser
-        |> Parser.skip (Parser.keyword "else" (ExpectedKeyword "else"))
+        |> Parser.skip (Variable.keyword "else" (ExpectedKeyword "else"))
         |> Parser.skip spaceParser
 
 
@@ -485,11 +485,11 @@ whenParser : Parser Context Error AST.Expression
 whenParser =
     Parser.succeed (\start expr firstBranch -> { start = start, expr = expr, firstBranch = firstBranch })
         |> Parser.keep Parser.getPosition
-        |> Parser.skip (Parser.keyword "when" (ExpectedKeyword "when"))
+        |> Parser.skip (Variable.keyword "when" (ExpectedKeyword "when"))
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.lazy (\_ -> parser))
         |> Parser.skip spaceParser
-        |> Parser.skip (Parser.keyword "is" (ExpectedKeyword "is"))
+        |> Parser.skip (Variable.keyword "is" (ExpectedKeyword "is"))
         |> Parser.skip spaceParser
         |> Parser.keep whenBranchParser
         |> Parser.andThen
