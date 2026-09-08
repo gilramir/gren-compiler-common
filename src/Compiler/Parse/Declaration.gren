@@ -241,11 +241,17 @@ deriveLoopParser classes =
 -- CLASSES
 
 
-{-| `class Eq a where` and the annotations under it.
+{-| `class Eq a where` and the annotations under it, or `class Num a` alone.
 
 `class` is a contextual keyword rather than a reserved word, so the head —
 `class`, space, an upper-case name — is `backtrackable`: anything else is a
 value named `class`, which `Html.Attributes` and `Svg.Attributes` both are.
+
+The body is optional (D133), for the same reason and by the same means as an
+annotation's context: `classes.md` §1.2's closed classes have no methods, so
+`class Num a` has to be a declaration, and `where` is several tokens past the
+point where the two shapes diverge. So the whole `where`-block is
+`backtrackable` and a class with no body costs one failed attempt.
 -}
 classParser : Parser Context Error DeclarationValue
 classParser =
@@ -267,10 +273,18 @@ classParser =
             )
         |> Parser.skip spaceParser
         |> Parser.keep (SourcePosition.parser lowerCaseVariable)
-        |> Parser.skip spaceParser
-        |> Parser.skip (Variable.keyword "where" (ExpectedKeyword "where"))
-        |> Parser.skip spaceParser
-        |> Parser.keep (blockParser classMethodParser)
+        |> Parser.keep
+            (Parser.oneOf
+                [ Parser.backtrackable
+                    (Parser.succeed identity
+                        |> Parser.skip spaceParser
+                        |> Parser.skip (Variable.keyword "where" (ExpectedKeyword "where"))
+                        |> Parser.skip spaceParser
+                        |> Parser.keep (blockParser classMethodParser)
+                    )
+                , Parser.succeed []
+                ]
+            )
 
 
 {-| The members of a `class` or `instance` body: an indented block, every
