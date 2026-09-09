@@ -61,6 +61,7 @@ Where `author` represents the person, or organization, that built the package, a
 Both `author` and `name` can contain alphanumeric characters and a single dash as a seperator,
 but no other characters.
 -}
+@derive(Eq)
 type PackageName
     = PackageName 
         { author : String
