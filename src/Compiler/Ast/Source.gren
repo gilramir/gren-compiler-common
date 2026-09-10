@@ -23,6 +23,7 @@ module Compiler.Ast.Source exposing
     , ClassMethod
     , Instance
     , Port
+    , Prim
     , Module
     , ModuleDeclaration
     , Exposing (..)
@@ -37,7 +38,7 @@ module Compiler.Ast.Source exposing
 
 {-| The Abstract Syntax Tree (AST) of Gren.
 
-@docs Expression, Expression_, VarType, IfBranch, WhenBranch, RecordField, Def, DefineRecord, Pattern, Pattern_, PRecordField, Type, Type_, TRecordField, Annotation, Constraint, Alias, Union, UnionVariant, Value, Class, ClassMethod, Instance, Port, Module, ModuleDeclaration, Exposing, Exposed, Privacy, Import, Effects, Manager, Infix, BinopAssociativity
+@docs Expression, Expression_, VarType, IfBranch, WhenBranch, RecordField, Def, DefineRecord, Pattern, Pattern_, PRecordField, Type, Type_, TRecordField, Annotation, Constraint, Alias, Union, UnionVariant, Value, Class, ClassMethod, Instance, Port, Prim, Module, ModuleDeclaration, Exposing, Exposed, Privacy, Import, Effects, Manager, Infix, BinopAssociativity
 
 -}
 
@@ -358,6 +359,21 @@ type alias Port =
   }
 
 
+{-| `@prim("i32_add")` and the annotation under it (`core.md` C13).
+
+A primitive declaration is an annotation with no equation: what it is bound to
+is the primitive the attribute names, so there is nothing to write on a second
+line. The signature is a `Type` and not an `Annotation` because a primitive is
+never constrained -- `@prim("i32_add") add : Num a => a -> a -> a` is not a
+type error to be caught later, it is a sentence the language does not have.
+-}
+type alias Prim =
+  { name : SourcePosition.Located String
+  , primName : SourcePosition.Located String
+  , signature : Type
+  }
+
+
 -- Module
 
 {-|
@@ -372,6 +388,7 @@ type alias Module =
   , instances : Array (ModuleDeclaration Instance)
   , unions : Array (ModuleDeclaration Union)
   , aliases : Array (ModuleDeclaration Alias)
+  , prims : Array (ModuleDeclaration Prim)
   , binops : Array (SourcePosition.Located Infix)
   , effects : Effects
   }

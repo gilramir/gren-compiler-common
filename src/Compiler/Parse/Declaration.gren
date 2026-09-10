@@ -20,6 +20,7 @@ import Compiler.SourcePosition as SourcePosition
 import Compiler.Parse.Space as Space
 import Compiler.Parse.Variable as Variable
 import Compiler.Parse.Pattern as Pattern
+import Compiler.Parse.String as String
 import Compiler.Parse.Type as Type
 import Compiler.Parse.Expression as Expr
 import Compiler.Parse.Context exposing (Context)
@@ -44,6 +45,7 @@ type DeclarationValue
     | Class AST.Class
     | Instance AST.Instance
     | Port AST.Port
+    | Prim AST.Prim
 
 
 {-| The kind of errors that can happen while parsing declarations.
@@ -54,6 +56,7 @@ type Error
     | VariableError Variable.Error
     | TypeError Type.Error
     | ExprError Expr.Error
+    | StringError String.Error
     | SpaceError Space.Error
     | IndentationError
     | UnknownAttribute String
@@ -81,6 +84,9 @@ errorToString error =
         
         ExprError exprError ->
             Expr.errorToString exprError
+
+        StringError strError ->
+            String.errorToString strError
         
         SpaceError spaceError ->
             Space.errorToString spaceError
@@ -113,10 +119,10 @@ spaceParser =
 parser : Parser Context Error Declaration
 parser =
     Parser.succeed
-        (\docs start derives ->
+        (\docs start attribute ->
             { docs = docs
             , start = start
-            , derives = derives
+            , attribute = attribute
             }
         )
         |> Parser.keep (docParser ExpectedKeyword)
@@ -125,12 +131,12 @@ parser =
         -- `type alias` and `port` all put a keyword first, and a newline
         -- between the keyword and the name is legal.
         |> Parser.keep Parser.getPosition
-        |> Parser.keep deriveParser
+        |> Parser.keep attributeParser
         |> Parser.andThen declarationValueParser
 
 
-declarationValueParser : { docs : Maybe (SourcePosition.Located String), start : SourcePosition.Position, derives : Array (SourcePosition.Located String) } -> Parser Context Error Declaration
-declarationValueParser { docs, start, derives } =
+declarationValueParser : { docs : Maybe (SourcePosition.Located String), start : SourcePosition.Position, attribute : Attribute } -> Parser Context Error Declaration
+declarationValueParser { docs, start, attribute } =
     let
         finish value =
             { docs = docs
@@ -138,18 +144,27 @@ declarationValueParser { docs, start, derives } =
             , value = value
             }
     in
-    -- `@derive` says which classes an abstract type derives, so the declaration
-    -- it is attached to has to be a custom type. Anything else is a misplaced
-    -- attribute rather than a declaration that quietly ignores it.
-    if not (Array.isEmpty derives) then
-        Parser.oneOf
-            [ typeParser derives
-            , Parser.problem AttributeNotOnCustomType
-            ]
-            |> Parser.map finish
+    when attribute is
+        -- `@derive` says which classes an abstract type derives, so the
+        -- declaration it is attached to has to be a custom type. Anything else
+        -- is a misplaced attribute rather than a declaration that quietly
+        -- ignores it.
+        Derive derives ->
+            Parser.oneOf
+                [ typeParser derives
+                , Parser.problem AttributeNotOnCustomType
+                ]
+                |> Parser.map finish
 
-    else
-        Parser.oneOf
+        -- No fallback list: `@prim` is followed by an annotation and nothing
+        -- else, so an error inside one is that error rather than "this is not
+        -- a primitive declaration".
+        Prim_ primName ->
+            primParser primName
+                |> Parser.map finish
+
+        NoAttribute ->
+            Parser.oneOf
                 [ typeParser []
                 , portParser
                 , classParser
@@ -180,46 +195,79 @@ declarationValueParser { docs, start, derives } =
 -- ATTRIBUTES
 
 
-{-| `@derive(Eq, Ord, Inspect)` on the line before a custom type.
+{-| The two attributes the language has: `@derive(Eq, Ord, Inspect)` on a
+custom type and `@prim("i32_add")` on an annotation (`core.md` C13).
 
 An attribute follows the documentation comment and precedes the declaration.
-This is the first one; `@extern` is the other customer and will land beside it.
+`@extern` is the remaining customer and will land beside them.
 -}
-deriveParser : Parser Context Error (Array (SourcePosition.Located String))
-deriveParser =
+type Attribute
+    = NoAttribute
+    | Derive (Array (SourcePosition.Located String))
+    | Prim_ (SourcePosition.Located String)
+
+
+attributeParser : Parser Context Error Attribute
+attributeParser =
     Parser.oneOf
         [ Parser.succeed identity
             |> Parser.skip (Parser.backtrackable (Parser.chompChar '@' (ExpectedChar '@')))
             |> Parser.keep (SourcePosition.parser lowerCaseVariable)
             |> Parser.andThen
                 (\name ->
-                    if name.value /= "derive" then
-                        Parser.problem (UnknownAttribute name.value)
+                    when name.value is
+                        "derive" ->
+                            Parser.map Derive (attributeArgsParser (Parser.loop [] deriveLoopParser))
 
-                    else
-                        Parser.succeed (\classes closeRow declRow -> { classes = classes, closeRow = closeRow, declRow = declRow })
-                            |> Parser.skip spaceParser
-                            |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
-                            |> Parser.skip spaceParser
-                            |> Parser.keep (Parser.loop [] deriveLoopParser)
-                            |> Parser.keep Parser.getRow
-                            |> Parser.skip spaceParser
-                            |> Parser.keep Parser.getRow
-                            |> Parser.andThen
-                                (\{ classes = classes, closeRow = closeRow, declRow = declRow } ->
-                                    -- The declaration goes on the row below the
-                                    -- attribute. The Haskell front end requires
-                                    -- a fresh line here too, and the two parsers
-                                    -- have to accept the same language.
-                                    if declRow <= closeRow then
-                                        Parser.problem AttributeNeedsFreshLine
+                        "prim" ->
+                            Parser.map Prim_ (attributeArgsParser primNameParser)
 
-                                    else
-                                        Parser.succeed classes
-                                )
+                        _ ->
+                            Parser.problem (UnknownAttribute name.value)
                 )
-        , Parser.succeed []
+        , Parser.succeed NoAttribute
         ]
+
+
+{-| `(`, the attribute's own argument, `)`, and then the fresh line the
+declaration starts on.
+-}
+attributeArgsParser : Parser Context Error a -> Parser Context Error a
+attributeArgsParser argsParser =
+    Parser.succeed (\args closeRow declRow -> { args = args, closeRow = closeRow, declRow = declRow })
+        |> Parser.skip spaceParser
+        |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
+        |> Parser.skip spaceParser
+        |> Parser.keep argsParser
+        |> Parser.keep Parser.getRow
+        |> Parser.skip spaceParser
+        |> Parser.keep Parser.getRow
+        |> Parser.andThen
+            (\{ args = args, closeRow = closeRow, declRow = declRow } ->
+                -- The declaration goes on the row below the attribute. The
+                -- Haskell front end requires a fresh line here too, and the two
+                -- parsers have to accept the same language.
+                if declRow <= closeRow then
+                    Parser.problem AttributeNeedsFreshLine
+
+                else
+                    Parser.succeed args
+            )
+
+
+{-| The primitive's name, as a string literal, and then the closing paren that
+`deriveLoopParser` consumes for the other attribute.
+
+A string rather than a bare word because `i32_add` is not an identifier -- Gren
+names have no underscores -- and inventing a second lexical class for the inside
+of one attribute would be worse than quoting it.
+-}
+primNameParser : Parser Context Error (SourcePosition.Located String)
+primNameParser =
+    Parser.succeed identity
+        |> Parser.keep (SourcePosition.parser (Parser.mapError StringError String.string))
+        |> Parser.skip spaceParser
+        |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
 
 
 deriveLoopParser : Array (SourcePosition.Located String) -> Parser Context Error (Parser.Step (Array (SourcePosition.Located String)) (Array (SourcePosition.Located String)))
@@ -593,6 +641,31 @@ portParser =
         )
         |> Parser.skip (Variable.keyword "port" (ExpectedKeyword "port"))
         |> Parser.skip spaceParser
+        |> Parser.keep (SourcePosition.parser lowerCaseVariable)
+        |> Parser.skip spaceParser
+        |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
+        |> Parser.skip spaceParser
+        |> Parser.keep (Parser.mapError TypeError Type.expression)
+
+
+{-| `@prim("i32_add")` and the annotation under it (`core.md` C13).
+
+The attribute has already been read; what is left is the name, the colon and
+the type. There is no equation, because the primitive the attribute names is
+the body.
+
+`Type.expression` and not an annotation: a primitive is never constrained.
+-}
+primParser : SourcePosition.Located String -> Parser Context Error DeclarationValue
+primParser primName =
+    Parser.succeed
+        (\name tipe ->
+            Prim
+                { name = name
+                , primName = primName
+                , signature = tipe
+                }
+        )
         |> Parser.keep (SourcePosition.parser lowerCaseVariable)
         |> Parser.skip spaceParser
         |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
