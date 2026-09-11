@@ -219,7 +219,14 @@ topLevelParser : Parser Context Error AST.Pattern
 topLevelParser =
     withAlias
     (Parser.oneOf
-        [ SourcePosition.parser (numberBy Number.parser)
+        -- `zeroOrHigher` and not `parser`, because **a pattern cannot match a
+        -- negative number**: the Haskell parser refuses one outright ("It is
+        -- not possible to pattern match on negative numbers at this time") and
+        -- D86 says both parsers accept the same sources. This one used to
+        -- accept `-42 ->` and hand back an `AST.PInt` whose text carried the
+        -- sign, so `geng fmt` would format a file `geng make` will not compile
+        -- (`geng-lang/docs/m1b-int.md` §I20).
+        [ SourcePosition.parser (numberBy Number.zeroOrHigher)
         , Parser.succeed (\var arg -> { ctor = var, arg = arg })
             |> Parser.keep (SourcePosition.parser (Parser.mapError VariableError Variable.foreignUpper))
             |> Parser.skip spaceParser
