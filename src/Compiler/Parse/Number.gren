@@ -1,10 +1,12 @@
 module Compiler.Parse.Number exposing
     ( Outcome (..)
+    , Suffix (..)
     , Error (..)
     , parser
     , zeroOrHigher
     , hexParser
     , hexDigits
+    , suffixToString
     , errorToString
     )
 
@@ -12,6 +14,10 @@ module Compiler.Parse.Number exposing
 {-| This module provides parsers for Gren numeric literals.
 
 @docs parser, Outcome, Error, errorToString
+
+## Suffixes
+
+@docs Suffix, suffixToString
 
 ## Specialized parsers
 
@@ -38,9 +44,51 @@ says about width. A caller that needs a small number -- an operator's
 precedence, a unicode escape -- reads it back with `String.toInt`.
 -}
 type Outcome
-    = Integer String
-    | FloatingPoint { val : Float, text : String }
-    | Hex String
+    = Integer { text : String, suffix : Maybe Suffix }
+    | FloatingPoint { val : Float, text : String, suffix : Maybe Suffix }
+    | Hex { text : String, suffix : Maybe Suffix }
+
+
+{-| The type a literal's suffix names (`docs/syntax.md` S5, D154).
+
+`42i64`, `42u32`, `42u64` and `1.5f32` are the four spellings, and the suffix
+is a **type ascription written on the literal**: it says which of D2's types the
+literal has, and it is accepted wherever the corresponding annotation would be.
+This parser does not type-check, so it accepts every suffix on every numeric
+literal and lets the frontend say that `1.5i64` is a mismatch -- which is what
+keeps D86's two grammars the same grammar.
+
+`Int` and `Float` have no suffix: S5 says their literals stay bare, so there is
+no `i32` and no `f64`.
+
+**There is no `f32` on a hex literal**, and no rule here says so: `f`, `3` and
+`2` are all hex digits, so [hexDigits](#hexDigits) has already eaten them and
+`0xFFf32` is the number `0xFFF32`. The Haskell parser reaches the same answer by
+a different road, which is the road D86 cares about.
+-}
+type Suffix
+    = I64
+    | U32
+    | U64
+    | F32
+
+
+{-| The suffix as it is written, without the number in front of it.
+-}
+suffixToString : Suffix -> String
+suffixToString suffix =
+    when suffix is
+        I64 ->
+            "i64"
+
+        U32 ->
+            "u32"
+
+        U64 ->
+            "u64"
+
+        F32 ->
+            "f32"
 
 
 {-| The kind of errors that can happen while parsing numbers.
@@ -80,14 +128,14 @@ parser =
         [ Parser.succeed
             (\outcome ->
                 when outcome is
-                    Integer text ->
-                        Integer ("-" ++ text)
+                    Integer record ->
+                        Integer { record | text = "-" ++ record.text }
 
                     FloatingPoint record ->
                         FloatingPoint { record | val = negate record.val, text = "-" ++ record.text }
 
-                    Hex text ->
-                        Hex ("-" ++ text)
+                    Hex record ->
+                        Hex { record | text = "-" ++ record.text }
             )
             |> Parser.skip (Parser.token "-" NotANumber)
             |> Parser.keep zeroOrHigher
@@ -107,6 +155,47 @@ parser =
 -}
 zeroOrHigher : Parser Context Error Outcome
 zeroOrHigher =
+    numberBody
+        |> Parser.andThen
+            (\outcome ->
+                Parser.map (\suffix -> withSuffix suffix outcome) suffixParser
+            )
+
+
+{-| An optional suffix, read after the digits and before the "no letter may
+follow a number" guard in [parser](#parser) -- which is what makes `42i64` one
+token and `42abc` still an error.
+-}
+suffixParser : Parser Context Error (Maybe Suffix)
+suffixParser =
+    Parser.oneOf
+        [ Parser.token "i64" NotANumber
+            |> Parser.map (\_ -> Just I64)
+        , Parser.token "u32" NotANumber
+            |> Parser.map (\_ -> Just U32)
+        , Parser.token "u64" NotANumber
+            |> Parser.map (\_ -> Just U64)
+        , Parser.token "f32" NotANumber
+            |> Parser.map (\_ -> Just F32)
+        , Parser.succeed Nothing
+        ]
+
+
+withSuffix : Maybe Suffix -> Outcome -> Outcome
+withSuffix suffix outcome =
+    when outcome is
+        Integer record ->
+            Integer { record | suffix = suffix }
+
+        FloatingPoint record ->
+            FloatingPoint { record | suffix = suffix }
+
+        Hex record ->
+            Hex { record | suffix = suffix }
+
+
+numberBody : Parser Context Error Outcome
+numberBody =
     Parser.oneOf
         [ Parser.chompChar '0' NotANumber
             |> Parser.andThen
@@ -114,13 +203,13 @@ zeroOrHigher =
                     Parser.oneOf
                         [ Parser.chompChar 'x' NotANumber
                             |> Parser.andThen (\_ -> hexDigits ExpectedHex)
-                            |> Parser.map (\digits -> Hex ("0x" ++ digits))
+                            |> Parser.map (\digits -> Hex { text = "0x" ++ digits, suffix = Nothing })
                         , Parser.chompChar '.' NotANumber
                             |> Parser.andThen (\_ -> fractalParser "0")
                         , exponentParser "0"
                         , Parser.chompIf Char.isDigit NotANumber
                             |> Parser.andThen (\_ -> Parser.problem LeadingZero)
-                        , Parser.succeed (Integer "0")
+                        , Parser.succeed (Integer { text = "0", suffix = Nothing })
                         ]
                 )
         , Parser.chompIf Char.isDigit NotANumber
@@ -132,7 +221,7 @@ zeroOrHigher =
                         [ Parser.chompChar '.' NotANumber
                             |> Parser.andThen (\_ -> fractalParser str)
                         , exponentParser str
-                        , Parser.succeed (Integer str)
+                        , Parser.succeed (Integer { text = str, suffix = Nothing })
                         ]
                 )
         ]
@@ -155,7 +244,7 @@ fractalParser str =
                             Parser.problem NotANumber
 
                         Just float ->
-                            Parser.succeed (FloatingPoint { val = float, text = base })
+                            Parser.succeed (FloatingPoint { val = float, text = base, suffix = Nothing })
                     ]
             )
 
@@ -188,7 +277,7 @@ exponentParser base =
                                             Parser.problem NotANumber
 
                                         Just float ->
-                                            Parser.succeed (FloatingPoint { val = float, text = fullText })
+                                            Parser.succeed (FloatingPoint { val = float, text = fullText, suffix = Nothing })
                                 )
                     )
             )
