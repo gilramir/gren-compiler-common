@@ -4,6 +4,7 @@ module Compiler.Parse.Number exposing
     , parser
     , zeroOrHigher
     , hexParser
+    , hexDigits
     , errorToString
     )
 
@@ -14,7 +15,7 @@ module Compiler.Parse.Number exposing
 
 ## Specialized parsers
 
-@docs zeroOrHigher, hexParser
+@docs zeroOrHigher, hexParser, hexDigits
 -}
 
 
@@ -23,11 +24,23 @@ import Compiler.Parse.Context exposing (Context)
 
 
 {-| The `parser` tolerates different kind of numbers: integers, floats and hex-encoded integers.
+
+**An integer literal is carried as the text it was written as, not as a
+number**, and `Hex` the same. A host `Int` is a double here, so accumulating
+digits into one is wrong above `2^53` -- and wrong *silently*, which is how
+`geng fmt` came to rewrite `9223372036854775807` as `9223372036854778000`
+(`docs/m1a-fmt.md` §F12, `docs/m1b-int.md` §I14.5 and §I16). D2 gives Gren
+integers this parser cannot hold in any one type: no single type covers both
+`Int64.minValue` and `UInt64.maxValue`. So the parser says what was *written*
+and the frontend that knows the literal's type decides what number it is, which
+is what the `FloatingPoint` case has always done with its `text` and what D149
+says about width. A caller that needs a small number -- an operator's
+precedence, a unicode escape -- reads it back with `String.toInt`.
 -}
 type Outcome
-    = Integer Int
+    = Integer String
     | FloatingPoint { val : Float, text : String }
-    | Hex Int
+    | Hex String
 
 
 {-| The kind of errors that can happen while parsing numbers.
@@ -67,14 +80,14 @@ parser =
         [ Parser.succeed
             (\outcome ->
                 when outcome is
-                    Integer int ->
-                        Integer (negate int)
+                    Integer text ->
+                        Integer ("-" ++ text)
 
                     FloatingPoint record ->
                         FloatingPoint { record | val = negate record.val, text = "-" ++ record.text }
 
-                    Hex hex ->
-                        Hex (negate hex)
+                    Hex text ->
+                        Hex ("-" ++ text)
             )
             |> Parser.skip (Parser.token "-" NotANumber)
             |> Parser.keep zeroOrHigher
@@ -100,14 +113,14 @@ zeroOrHigher =
                 (\_ ->
                     Parser.oneOf
                         [ Parser.chompChar 'x' NotANumber
-                            |> Parser.andThen (\_ -> hexParser ExpectedHex)
-                            |> Parser.map Hex
+                            |> Parser.andThen (\_ -> hexDigits ExpectedHex)
+                            |> Parser.map (\digits -> Hex ("0x" ++ digits))
                         , Parser.chompChar '.' NotANumber
                             |> Parser.andThen (\_ -> fractalParser "0")
                         , exponentParser "0"
                         , Parser.chompIf Char.isDigit NotANumber
                             |> Parser.andThen (\_ -> Parser.problem LeadingZero)
-                        , Parser.succeed (Integer 0)
+                        , Parser.succeed (Integer "0")
                         ]
                 )
         , Parser.chompIf Char.isDigit NotANumber
@@ -115,17 +128,12 @@ zeroOrHigher =
             |> Parser.getChompedString
             |> Parser.andThen
                 (\str ->
-                    when String.toInt str is
-                        Nothing ->
-                            Parser.problem NotANumber
-
-                        Just num ->
-                            Parser.oneOf
-                                [ Parser.chompChar '.' NotANumber
-                                    |> Parser.andThen (\_ -> fractalParser str)
-                                , exponentParser str
-                                , Parser.succeed (Integer num)
-                                ]
+                    Parser.oneOf
+                        [ Parser.chompChar '.' NotANumber
+                            |> Parser.andThen (\_ -> fractalParser str)
+                        , exponentParser str
+                        , Parser.succeed (Integer str)
+                        ]
                 )
         ]
 
@@ -186,17 +194,25 @@ exponentParser base =
             )
 
 {-| A parser that only parses hex-encoded integers, like `0xAB`.
+
+This one answers a number, and it stays that way because its callers are the
+bounded ones: a `\u{...}` escape is at most `0x10FFFF`. A hex *literal* goes
+through [zeroOrHigher](#zeroOrHigher) and comes back as text, for the reason
+[parser](#parser) gives.
 -}
 hexParser : error -> Parser Context error Int
 hexParser err =
+    hexDigits err
+        |> Parser.map (String.foldl hexFolder 0)
+
+
+{-| The digits of a hex literal, as written.
+-}
+hexDigits : error -> Parser Context error String
+hexDigits err =
     Parser.chompIf Char.isHexDigit err
         |> Parser.skip (Parser.chompWhile Char.isHexDigit)
         |> Parser.getChompedString
-        |> Parser.andThen
-            (\hexString ->
-                String.foldl hexFolder 0 hexString
-                    |> Parser.succeed
-            )
 
 
 hexFolder : Char -> Int -> Int

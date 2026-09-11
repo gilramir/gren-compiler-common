@@ -194,7 +194,7 @@ type Pattern_
   | PChr Char
   | PStr String
   | PInt
-    { value : Int
+    { text : String
     , isHex : Bool
     }
 

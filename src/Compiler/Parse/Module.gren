@@ -340,8 +340,14 @@ parsePrecedence =
         |> Parser.andThen
             (\outcome ->
                 when outcome is
-                    Number.Integer int ->
-                        Parser.succeed int
+                    Number.Integer text ->
+                        when String.toInt text is
+                            Just int ->
+                                Parser.succeed int
+
+                            Nothing ->
+                                Parser.problem ExpectedIntPrecedence
+
                     _ ->
                         Parser.problem ExpectedIntPrecedence
             )
