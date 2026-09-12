@@ -97,20 +97,22 @@ coreParser =
                             |> Parser.skip (Parser.chompChar '}' ExpectedUnicodeClosing)
                             |> Parser.andThen
                                 (\num ->
-                                    let
-                                        character =
-                                            Char.fromCode num
+                                    -- `Char.fromCode` answers `Nothing` for a
+                                    -- number that is not a Unicode scalar
+                                    -- value (C8, `m1b-str.md` §T12), which is
+                                    -- the question this escape is asking. What
+                                    -- was here looked for the replacement
+                                    -- character coming back and treated that as
+                                    -- the failure -- which no failure produced:
+                                    -- a surrogate escape was accepted, and a
+                                    -- number past `0x10FFFF` threw a
+                                    -- `RangeError` out of the kernel.
+                                    when Char.fromCode num is
+                                        Nothing ->
+                                            Parser.problem ExpectedValidUnicode
 
-                                        replacementCode =
-                                            Char.toCode '\u{FFFD}'
-                                    in
-                                    -- When converting from char code, we will get the replacement character
-                                    -- if the conversion fails. The replacement character itself is valid unicode
-                                    if Char.toCode character == replacementCode && num /= replacementCode then
-                                        Parser.problem ExpectedValidUnicode
-
-                                    else
-                                        Parser.succeed character
+                                        Just character ->
+                                            Parser.succeed character
                                 )
                         , Parser.chompIf (\_ -> True)  ExpectedChar
                             |> Parser.getChompedString
