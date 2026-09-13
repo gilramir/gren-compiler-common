@@ -79,7 +79,7 @@ parseLoop _state =
         [ Parser.succeed
             (\start comment end ->
                 comment
-                    |> String.sliceUnits 2 (String.unitLength comment)
+                    |> String.dropFirst 2
                     |> Context.Line
                     |> SourcePosition.at start end
             )
@@ -100,7 +100,8 @@ parseLoop _state =
         , Parser.succeed
             (\start comment end ->
                 comment
-                    |> String.sliceUnits 2 -2
+                    |> String.dropFirst 2
+                    |> String.dropLast 2
                     |> Context.Block
                     |> SourcePosition.at start end
             )
