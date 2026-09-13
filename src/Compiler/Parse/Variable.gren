@@ -27,7 +27,7 @@ module Compiler.Parse.Variable exposing
 
 
 import String.Parser.Advanced as Parser exposing (Parser)
-import String.Regex as Regex exposing (Regex)
+import Compiler.Parse.Letters as Letters
 import Set exposing (Set)
 import Compiler.Parse.Context exposing (Context)
 
@@ -228,36 +228,83 @@ foreignVarLoop acc =
         ]
 
 
-lowerCaseLetterRegex : Regex
-lowerCaseLetterRegex =
-    Regex.fromString "\\p{Ll}"
-        |> Maybe.withDefault Regex.never
-
-
+{-| May this character start a lower-case name? A lowercase letter,
+general category `Ll`.
+-}
 isLowerCaseLetter : Char -> Bool
 isLowerCaseLetter char =
-    String.fromChar char
-        |> Regex.contains lowerCaseLetterRegex
+    Char.isLower char || letterClass char == Letters.lower
 
 
-upperCaseLetterRegex : Regex
-upperCaseLetterRegex =
-    Regex.fromString "\\p{Lu}"
-        |> Maybe.withDefault Regex.never
-
-
+{-| May this character start an upper-case name? An uppercase or titlecase
+letter, general category `Lu` or `Lt` — titlecase because `ǅ` is where a
+capitalised word that starts with that digraph begins.
+-}
 isUpperCaseLetter : Char -> Bool
 isUpperCaseLetter char =
-    String.fromChar char
-        |> Regex.contains upperCaseLetterRegex
+    Char.isUpper char || letterClass char == Letters.upper
+
+
+{-| Which of `Compiler.Parse.Letters`' classes a character above ASCII is in,
+or `0` if it is not a letter. Below 128 this is always `0`: the callers ask
+`Char.isLower`, `Char.isUpper` and `Char.isAlphaNum` first, and the generator
+refuses a database in which the ASCII letters are anything but `A`-`Z` and
+`a`-`z`.
+
+These were `\p{Ll}` and `\p{Lu}` regexes, which asked the host's Unicode
+version and left out titlecase, modifier and "other" letters that the Haskell
+frontend accepts (`docs/m1b-str.md` §T23).
+-}
+letterClass : Char -> Int
+letterClass char =
+    let
+        code =
+            Char.toCode char
+    in
+    if code < 128 then
+        0
+
+    else
+        searchLetters code 0 (Array.length Letters.ranges // 3 - 1)
+
+
+searchLetters : Int -> Int -> Int -> Int
+searchLetters code low high =
+    if low > high then
+        0
+
+    else
+        let
+            mid =
+                low + (high - low) // 2
+        in
+        when Array.get (mid * 3) Letters.ranges is
+            Just lo ->
+                if code < lo then
+                    searchLetters code low (mid - 1)
+
+                else
+                    when Array.get (mid * 3 + 1) Letters.ranges is
+                        Just hi ->
+                            if code > hi then
+                                searchLetters code (mid + 1) high
+
+                            else
+                                Array.get (mid * 3 + 2) Letters.ranges
+                                    |> Maybe.withDefault 0
+
+                        Nothing ->
+                            0
+
+            Nothing ->
+                0
 
 
 isInner : Char -> Bool
 isInner char =
     Char.isAlphaNum char
         || char == '_'
-        || isLowerCaseLetter char
-        || isUpperCaseLetter char
+        || letterClass char /= 0
 
 
 {-| Parse a keyword, and require that the source does not simply continue into
