@@ -22,6 +22,7 @@ import Compiler.Parse.Declaration as Declaration
 import Compiler.Parse.Number as Number
 import Compiler.Parse.Declaration as Declaration exposing (Declaration)
 import Compiler.Parse.Context exposing (Context)
+import Compiler.ModuleName as ModuleName
 
 
 {-| The kind of errors that can happen while parsing Gren modules.
@@ -35,6 +36,7 @@ type Error
     | DeclarationError Declaration.Error
     | SpaceError Space.Error
     | ExpectedEnd
+    | InvalidModuleName String
 
 
 {-| Returns a human-readable description of an `Error`.
@@ -65,6 +67,9 @@ errorToString error =
 
         ExpectedEnd ->
             "Expected end of file"
+
+        InvalidModuleName name ->
+            "Invalid module name '" ++ name ++ "': a module name is a capital letter followed by ASCII letters and digits, in each part"
 
 
 spaceParser : Parser Context Error {}
@@ -174,6 +179,18 @@ moduleNameParser =
         ( Variable.foreignUpper
             |> Parser.mapError VariableError
             |> Parser.map Variable.foreignVarToString
+            |> Parser.andThen
+                (\name ->
+                    -- D171: `Compiler.ModuleName.fromString`'s rule, ASCII
+                    -- letters and digits, which is what a source file's name
+                    -- already had to satisfy (`docs/m1b-str.md` §T24.5).
+                    when ModuleName.fromString name is
+                        Just _ ->
+                            Parser.succeed name
+
+                        Nothing ->
+                            Parser.problem (InvalidModuleName name)
+                )
         )
 
 
