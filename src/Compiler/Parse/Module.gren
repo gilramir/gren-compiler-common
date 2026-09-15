@@ -106,6 +106,9 @@ parser =
 
                 prims =
                     Array.mapAndKeepJust declarationToModulePrim decls
+
+                externs =
+                    Array.mapAndKeepJust declarationToModuleExtern decls
             in
             { name = name
             , exports = exports
@@ -117,6 +120,7 @@ parser =
             , unions = unions
             , aliases = aliases
             , prims = prims
+            , externs = externs
             , binops = binops
             , effects =
                 when ports is
@@ -608,6 +612,22 @@ declarationToModuleUnion decl =
                 SourcePosition.at
                     decl.start
                     endPos
+                    { docs = decl.docs
+                    , value = v
+                    }
+
+        _ ->
+            Nothing
+
+
+declarationToModuleExtern : Declaration -> Maybe (AST.ModuleDeclaration AST.Extern)
+declarationToModuleExtern decl =
+    when decl.value is
+        Declaration.Extern v ->
+            Just <|
+                SourcePosition.at
+                    decl.start
+                    v.signature.end
                     { docs = decl.docs
                     , value = v
                     }

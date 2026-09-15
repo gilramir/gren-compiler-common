@@ -24,6 +24,8 @@ module Compiler.Ast.Source exposing
     , Instance
     , Port
     , Prim
+    , Extern
+    , ExternImpl
     , Module
     , ModuleDeclaration
     , Exposing (..)
@@ -38,7 +40,7 @@ module Compiler.Ast.Source exposing
 
 {-| The Abstract Syntax Tree (AST) of Gren.
 
-@docs Expression, Expression_, VarType, IfBranch, WhenBranch, RecordField, Def, DefineRecord, Pattern, Pattern_, PRecordField, Type, Type_, TRecordField, Annotation, Constraint, Alias, Union, UnionVariant, Value, Class, ClassMethod, Instance, Port, Prim, Module, ModuleDeclaration, Exposing, Exposed, Privacy, Import, Effects, Manager, Infix, BinopAssociativity
+@docs Expression, Expression_, VarType, IfBranch, WhenBranch, RecordField, Def, DefineRecord, Pattern, Pattern_, PRecordField, Type, Type_, TRecordField, Annotation, Constraint, Alias, Union, UnionVariant, Value, Class, ClassMethod, Instance, Port, Prim, Extern, ExternImpl, Module, ModuleDeclaration, Exposing, Exposed, Privacy, Import, Effects, Manager, Infix, BinopAssociativity
 
 -}
 
@@ -375,6 +377,31 @@ type alias Prim =
   }
 
 
+{-| `@extern(js, "geng_time", "now")` rows and the annotation under them
+(`ffi.md` F1, `m1b-extern.md` §H8 step 2).
+
+Like a primitive, an annotation with no equation: the attributes are what it is
+bound to. Also like a primitive, the signature is a `Type` and never
+constrained. Which languages exist and how many names each takes is the
+compiler's check, not the parser's, so any language and any number of names
+parse here, as they do in the Haskell front end.
+-}
+type alias Extern =
+  { name : SourcePosition.Located String
+  , impls : Array ExternImpl
+  , signature : Type
+  }
+
+
+{-| One attribute row: `@extern` or `@externPure`, a language, and its names.
+-}
+type alias ExternImpl =
+  { pure : Bool
+  , language : SourcePosition.Located String
+  , names : Array (SourcePosition.Located String)
+  }
+
+
 -- Module
 
 {-|
@@ -390,6 +417,7 @@ type alias Module =
   , unions : Array (ModuleDeclaration Union)
   , aliases : Array (ModuleDeclaration Alias)
   , prims : Array (ModuleDeclaration Prim)
+  , externs : Array (ModuleDeclaration Extern)
   , binops : Array (SourcePosition.Located Infix)
   , effects : Effects
   }

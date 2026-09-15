@@ -46,6 +46,7 @@ type DeclarationValue
     | Instance AST.Instance
     | Port AST.Port
     | Prim AST.Prim
+    | Extern AST.Extern
 
 
 {-| The kind of errors that can happen while parsing declarations.
@@ -62,6 +63,7 @@ type Error
     | UnknownAttribute String
     | AttributeNotOnCustomType
     | AttributeNeedsFreshLine
+    | AttributeAfterExtern String
     | InstanceMethodHasSignature String
 
 
@@ -102,6 +104,9 @@ errorToString error =
 
         AttributeNeedsFreshLine ->
             "Expected the declaration on the line after this attribute"
+
+        AttributeAfterExtern name ->
+            "Only '@extern' and '@externPure' may follow an '@extern', and this is '@" ++ name ++ "'"
 
         InstanceMethodHasSignature name ->
             "'" ++ name ++ "' has a type annotation, and a method of an instance takes none"
@@ -163,6 +168,11 @@ declarationValueParser { docs, start, attribute } =
             primParser primName
                 |> Parser.map finish
 
+        -- Further rows can only be externs, and then the annotation.
+        Extern_ first ->
+            externParser first
+                |> Parser.map finish
+
         NoAttribute ->
             Parser.oneOf
                 [ typeParser []
@@ -205,6 +215,7 @@ type Attribute
     = NoAttribute
     | Derive (Array (SourcePosition.Located String))
     | Prim_ (SourcePosition.Located String)
+    | Extern_ AST.ExternImpl
 
 
 attributeParser : Parser Context Error Attribute
@@ -221,6 +232,12 @@ attributeParser =
 
                         "prim" ->
                             Parser.map Prim_ (attributeArgsParser primNameParser)
+
+                        "extern" ->
+                            Parser.map Extern_ (attributeArgsParser (externArgsParser False))
+
+                        "externPure" ->
+                            Parser.map Extern_ (attributeArgsParser (externArgsParser True))
 
                         _ ->
                             Parser.problem (UnknownAttribute name.value)
@@ -268,6 +285,73 @@ primNameParser =
         |> Parser.keep (SourcePosition.parser (Parser.mapError StringError String.string))
         |> Parser.skip spaceParser
         |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+
+
+{-| `js, "geng_time", "now")`: a language and its names, then the closing
+paren, as `primNameParser` ends on one.
+-}
+externArgsParser : Bool -> Parser Context Error AST.ExternImpl
+externArgsParser isPure =
+    Parser.succeed (\language names -> { pure = isPure, language = language, names = names })
+        |> Parser.keep (SourcePosition.parser lowerCaseVariable)
+        |> Parser.skip spaceParser
+        |> Parser.keep (Parser.loop [] externNamesLoopParser)
+
+
+externNamesLoopParser : Array (SourcePosition.Located String) -> Parser Context Error (Parser.Step (Array (SourcePosition.Located String)) (Array (SourcePosition.Located String)))
+externNamesLoopParser names =
+    Parser.oneOf
+        [ Parser.succeed (\name -> Parser.Loop (Array.pushLast name names))
+            |> Parser.skip (Parser.chompChar ',' (ExpectedChar ','))
+            |> Parser.skip spaceParser
+            |> Parser.keep (SourcePosition.parser (Parser.mapError StringError String.string))
+            |> Parser.skip spaceParser
+        , Parser.succeed (Parser.Done names)
+            |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+        ]
+
+
+{-| The rest of an extern declaration: more `@extern` rows, then the name, the
+colon and the type, as `primParser` reads them.
+-}
+externParser : AST.ExternImpl -> Parser Context Error DeclarationValue
+externParser first =
+    Parser.succeed
+        (\impls name tipe ->
+            Extern
+                { name = name
+                , impls = impls
+                , signature = tipe
+                }
+        )
+        |> Parser.keep (Parser.loop [ first ] moreExternsLoopParser)
+        |> Parser.keep (SourcePosition.parser lowerCaseVariable)
+        |> Parser.skip spaceParser
+        |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
+        |> Parser.skip spaceParser
+        |> Parser.keep (Parser.mapError TypeError Type.expression)
+
+
+moreExternsLoopParser : Array AST.ExternImpl -> Parser Context Error (Parser.Step (Array AST.ExternImpl) (Array AST.ExternImpl))
+moreExternsLoopParser impls =
+    Parser.oneOf
+        [ Parser.succeed identity
+            |> Parser.skip (Parser.backtrackable (Parser.chompChar '@' (ExpectedChar '@')))
+            |> Parser.keep (SourcePosition.parser lowerCaseVariable)
+            |> Parser.andThen
+                (\name ->
+                    when name.value is
+                        "extern" ->
+                            Parser.map (\impl -> Parser.Loop (Array.pushLast impl impls)) (attributeArgsParser (externArgsParser False))
+
+                        "externPure" ->
+                            Parser.map (\impl -> Parser.Loop (Array.pushLast impl impls)) (attributeArgsParser (externArgsParser True))
+
+                        _ ->
+                            Parser.problem (AttributeAfterExtern name.value)
+                )
+        , Parser.succeed (Parser.Done impls)
+        ]
 
 
 deriveLoopParser : Array (SourcePosition.Located String) -> Parser Context Error (Parser.Step (Array (SourcePosition.Located String)) (Array (SourcePosition.Located String)))
