@@ -312,17 +312,17 @@ externNamesLoopParser names =
 
 
 {-| The rest of an extern declaration: more `@extern` rows, then the name, the
-colon and the type, as `primParser` reads them.
+colon and the type, as `primParser` reads them, and then the Geng body if one
+follows (D222).
 -}
 externParser : AST.ExternImpl -> Parser Context Error DeclarationValue
 externParser first =
     Parser.succeed
         (\impls name tipe ->
-            Extern
-                { name = name
-                , impls = impls
-                , signature = tipe
-                }
+            { name = name
+            , impls = impls
+            , signature = tipe
+            }
         )
         |> Parser.keep (Parser.loop [ first ] moreExternsLoopParser)
         |> Parser.keep (SourcePosition.parser lowerCaseVariable)
@@ -330,6 +330,48 @@ externParser first =
         |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.mapError TypeError Type.expression)
+        |> Parser.andThen
+            (\declared ->
+                Parser.map
+                    (\definition ->
+                        Extern
+                            { name = declared.name
+                            , impls = declared.impls
+                            , signature = declared.signature
+                            , definition = definition
+                            }
+                    )
+                    (externDefinitionParser declared.name.value)
+            )
+
+
+{-| An equation for the extern's own name on a fresh line, or nothing. Only the
+name is read backtrackably, so a following declaration with another name is left
+whole, and an error inside the equation is that error.
+-}
+externDefinitionParser : String -> Parser Context Error (Maybe { name : SourcePosition.Located String, args : Array AST.Pattern, body : AST.Expression })
+externDefinitionParser name =
+    Parser.oneOf
+        [ Parser.succeed (\defName def -> Just { name = defName, args = def.args, body = def.body })
+            |> Parser.keep
+                (Parser.backtrackable
+                    (Parser.succeed identity
+                        |> Parser.skip spaceParser
+                        |> Parser.keep (SourcePosition.parser lowerCaseVariable)
+                        |> Parser.andThen
+                            (\defName ->
+                                if defName.value == name && defName.start.col == 1 then
+                                    Parser.succeed defName
+
+                                else
+                                    Parser.problem (ExpectedKeyword name)
+                            )
+                    )
+                )
+            |> Parser.skip spaceParser
+            |> Parser.keep (Parser.mapError ExprError Expr.defArgsAndBodyParser)
+        , Parser.succeed Nothing
+        ]
 
 
 moreExternsLoopParser : Array AST.ExternImpl -> Parser Context Error (Parser.Step (Array AST.ExternImpl) (Array AST.ExternImpl))

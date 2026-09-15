@@ -2,13 +2,14 @@ module Compiler.Parse.Expression exposing
     ( Error (..)
     , parser
     , letDefNamedParser
+    , defArgsAndBodyParser
     , errorToString
     )
 
 
 {-| This module provides parsers for Gren expressions.
 
-@docs parser, Error, errorToString, letDefNamedParser
+@docs parser, Error, errorToString, letDefNamedParser, defArgsAndBodyParser
 -}
 
 
@@ -394,6 +395,17 @@ letDefNamedParser =
                     |> Parser.skip spaceParser
                     |> Parser.keep (Parser.lazy (\_ -> parser))
             )
+
+
+{-| The arguments and body of a named definition whose name has been read, up to
+the end of the body: an extern declaration's Geng body (D222).
+-}
+defArgsAndBodyParser : Parser Context Error { args : Array AST.Pattern, body : AST.Expression }
+defArgsAndBodyParser =
+    Parser.succeed (\args body -> { args = args, body = body })
+        |> Parser.keep (Parser.loop [] (functionArgsParser "="))
+        |> Parser.skip spaceParser
+        |> Parser.keep (Parser.lazy (\_ -> parser))
 
 
 letDefDestructParser : Parser Context Error (SourcePosition.Located AST.Def)

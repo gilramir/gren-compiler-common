@@ -380,16 +380,25 @@ type alias Prim =
 {-| `@extern(js, "geng_time", "now")` rows and the annotation under them
 (`ffi.md` F1, `m1b-extern.md` §H8 step 2).
 
-Like a primitive, an annotation with no equation: the attributes are what it is
-bound to. Also like a primitive, the signature is a `Type` and never
-constrained. Which languages exist and how many names each takes is the
-compiler's check, not the parser's, so any language and any number of names
-parse here, as they do in the Haskell front end.
+Like a primitive, the attributes are what it is bound to, and the signature is
+a `Type` and never constrained. Which languages exist and how many names each
+takes is the compiler's check, not the parser's, so any language and any number
+of names parse here, as they do in the Haskell front end.
+
+`definition` is the declaration's Geng body, when it has one (D222,
+`m1b-json.md` §O17): an equation of the same name on the line after the
+annotation, which a backend with no row for its language compiles.
 -}
 type alias Extern =
   { name : SourcePosition.Located String
   , impls : Array ExternImpl
   , signature : Type
+  , definition :
+    Maybe
+      { name : SourcePosition.Located String
+      , args : Array Pattern
+      , body : Expression
+      }
   }
 
 

@@ -627,7 +627,13 @@ declarationToModuleExtern decl =
             Just <|
                 SourcePosition.at
                     decl.start
-                    v.signature.end
+                    (when v.definition is
+                        Just def ->
+                            def.body.end
+
+                        Nothing ->
+                            v.signature.end
+                    )
                     { docs = decl.docs
                     , value = v
                     }
