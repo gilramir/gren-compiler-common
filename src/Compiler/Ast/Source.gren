@@ -307,6 +307,9 @@ type alias UnionVariant =
 -}
 type alias Value =
   { name : SourcePosition.Located String
+  -- Declared under `@capability` (D258): only the application and the
+  -- declaring package may refer to it.
+  , capability : Bool
   , signature :
     Maybe
       { start : SourcePosition.Position

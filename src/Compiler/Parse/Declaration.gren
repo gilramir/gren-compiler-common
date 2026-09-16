@@ -64,6 +64,7 @@ type Error
     | AttributeNotOnCustomType
     | AttributeNeedsFreshLine
     | AttributeAfterExtern String
+    | CapabilityWithoutAnnotation
     | InstanceMethodHasSignature String
 
 
@@ -107,6 +108,9 @@ errorToString error =
 
         AttributeAfterExtern name ->
             "Only '@extern' and '@externPure' may follow an '@extern', and this is '@" ++ name ++ "'"
+
+        CapabilityWithoutAnnotation ->
+            "Expected a type annotation on the value under '@capability'"
 
         InstanceMethodHasSignature name ->
             "'" ++ name ++ "' has a type annotation, and a method of an instance takes none"
@@ -173,46 +177,74 @@ declarationValueParser { docs, start, attribute } =
             externParser first
                 |> Parser.map finish
 
+        -- A capability is minted by an ordinary value (D258), so what follows
+        -- is a value declaration and nothing else.
+        Capability_ ->
+            valueParser True start
+                |> Parser.andThen
+                    (\value ->
+                        when value is
+                            Value v ->
+                                when v.signature is
+                                    Nothing ->
+                                        Parser.problem CapabilityWithoutAnnotation
+
+                                    Just _ ->
+                                        Parser.succeed value
+
+                            _ ->
+                                Parser.succeed value
+                    )
+                |> Parser.map finish
+
         NoAttribute ->
             Parser.oneOf
                 [ typeParser []
                 , portParser
                 , classParser
                 , instanceParser
-                , Expr.letDefNamedParser
-                    |> Parser.mapError ExprError
-                    |> Parser.map
-                        (\def ->
-                            Value
-                                { name = def.value.name
-                                , signature =
-                                    Maybe.map
-                                        (\t ->
-                                            { start = start
-                                            , constraints = t.constraints
-                                            , type_ = t.type_
-                                            }
-                                        )
-                                        def.value.typeSignature
-                                , args = def.value.args
-                                , body = def.value.body
-                                }
-                        )
+                , valueParser False start
                 ]
                 |> Parser.map finish
+
+
+valueParser : Bool -> SourcePosition.Position -> Parser Context Error DeclarationValue
+valueParser capability start =
+    Expr.letDefNamedParser
+        |> Parser.mapError ExprError
+        |> Parser.map
+            (\def ->
+                Value
+                    { name = def.value.name
+                    , capability = capability
+                    , signature =
+                        Maybe.map
+                            (\t ->
+                                { start = start
+                                , constraints = t.constraints
+                                , type_ = t.type_
+                                }
+                            )
+                            def.value.typeSignature
+                    , args = def.value.args
+                    , body = def.value.body
+                    }
+            )
 
 
 -- ATTRIBUTES
 
 
-{-| The two attributes the language has: `@derive(Eq, Ord, Inspect)` on a
-custom type and `@prim("i32_add")` on an annotation (`core.md` C13).
+{-| The attributes the language has: `@derive(Eq, Ord, Inspect)` on a custom
+type, `@prim("i32_add")` on an annotation (`core.md` C13), `@extern` and
+`@externPure` on an annotation (`ffi.md` F1), and a bare `@capability` on a
+value that mints a capability (D258).
 
 An attribute follows the documentation comment and precedes the declaration.
-`@extern` is the remaining customer and will land beside them.
 -}
 type Attribute
     = NoAttribute
+    | Capability_
     | Derive (Array (SourcePosition.Located String))
     | Prim_ (SourcePosition.Located String)
     | Extern_ AST.ExternImpl
@@ -233,6 +265,9 @@ attributeParser =
                         "prim" ->
                             Parser.map Prim_ (attributeArgsParser primNameParser)
 
+                        "capability" ->
+                            Parser.map (\_ -> Capability_) bareAttributeEndParser
+
                         "extern" ->
                             Parser.map Extern_ (attributeArgsParser (externArgsParser False))
 
@@ -244,6 +279,25 @@ attributeParser =
                 )
         , Parser.succeed NoAttribute
         ]
+
+
+{-| The end of an attribute with no arguments: the fresh line the declaration
+starts on, as `attributeArgsParser` requires after the others.
+-}
+bareAttributeEndParser : Parser Context Error {}
+bareAttributeEndParser =
+    Parser.succeed (\nameRow declRow -> { nameRow = nameRow, declRow = declRow })
+        |> Parser.keep Parser.getRow
+        |> Parser.skip spaceParser
+        |> Parser.keep Parser.getRow
+        |> Parser.andThen
+            (\{ nameRow = nameRow, declRow = declRow } ->
+                if declRow <= nameRow then
+                    Parser.problem AttributeNeedsFreshLine
+
+                else
+                    Parser.succeed {}
+            )
 
 
 {-| `(`, the attribute's own argument, `)`, and then the fresh line the
