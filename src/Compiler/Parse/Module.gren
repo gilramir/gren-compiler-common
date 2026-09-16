@@ -37,6 +37,7 @@ type Error
     | SpaceError Space.Error
     | ExpectedEnd
     | InvalidModuleName String
+    | RemovedModuleHeader String
 
 
 {-| Returns a human-readable description of an `Error`.
@@ -71,6 +72,9 @@ errorToString error =
         InvalidModuleName name ->
             "Invalid module name '" ++ name ++ "': a module name is a capital letter followed by ASCII letters and digits, in each part"
 
+        RemovedModuleHeader header ->
+            "This module's header is `" ++ header ++ "`, and Geng has no such modules: a call into JavaScript is an `@extern` that answers a `Task`, and events the host produces arrive through a `Source`"
+
 
 spaceParser : Parser Context Error {}
 spaceParser =
@@ -84,7 +88,7 @@ spaceParser =
 parser : Parser Context Error AST.Module
 parser =
     Parser.succeed
-        (\{ name, effects } exports docs imports binops decls ->
+        (\name exports docs imports binops decls ->
             let
                 values =
                     Array.mapAndKeepJust declarationToModuleValue decls
@@ -100,9 +104,6 @@ parser =
 
                 aliases =
                     Array.mapAndKeepJust declarationToModuleAlias decls
-
-                ports =
-                    Array.mapAndKeepJust declarationToModulePort decls
 
                 prims =
                     Array.mapAndKeepJust declarationToModulePrim decls
@@ -122,16 +123,6 @@ parser =
             , prims = prims
             , externs = externs
             , binops = binops
-            , effects =
-                when ports is
-                    [] ->
-                        -- TODO: support both ports and effects
-                        -- currently, only kernel devs can define effects
-                        -- so don't worry about it for now
-                        effects
-
-                    _ ->
-                        AST.Ports ports
             }
         )
         -- Every keyword in this module is matched with `Variable.keyword`
@@ -141,30 +132,20 @@ parser =
         -- on the rest of the name. The boundary has to be this module's own —
         -- `String.Parser`'s ends a word at `Char.isAlphaNum`, which is ASCII,
         -- and would split `typeé` the same way `token` split `infixOf`.
-        |> Parser.keep
+        --
+        -- `port module` and `effect module` are refused rather than read (D280,
+        -- geng-lang `m1b-source.md` §SO20), and `port` is an ordinary name
+        -- (D279), so the refusal is the two words together.
+        |> Parser.skip
             (Parser.oneOf
-                [ Parser.succeed (\name effects -> { name = name, effects = AST.Manager effects })
-                    |> Parser.skip (Variable.keyword "effect" (ExpectedKeyword "effect"))
-                    |> Parser.skip spaceParser
-                    |> Parser.skip (Variable.keyword "module" (ExpectedKeyword "module"))
-                    |> Parser.skip spaceParser
-                    |> Parser.keep moduleNameParser
-                    |> Parser.skip spaceParser
-                    |> Parser.keep effectParser
-                , Parser.succeed (\name -> { name = name, effects = AST.NoEffects })
-                    |> Parser.skip
-                        (Parser.oneOf
-                            [ Parser.succeed {}
-                                |> Parser.skip (Variable.keyword "port" (ExpectedKeyword "port"))
-                                |> Parser.skip spaceParser
-                            , Parser.succeed {}
-                            ]
-                        )
-                    |> Parser.skip (Variable.keyword "module" (ExpectedKeyword "module"))
-                    |> Parser.skip spaceParser
-                    |> Parser.keep moduleNameParser
+                [ removedHeaderParser "port"
+                , removedHeaderParser "effect"
+                , Parser.succeed {}
                 ]
             )
+        |> Parser.skip (Variable.keyword "module" (ExpectedKeyword "module"))
+        |> Parser.skip spaceParser
+        |> Parser.keep moduleNameParser
         |> Parser.skip spaceParser
         |> Parser.keep parseExposingStatement
         |> Parser.skip spaceParser
@@ -198,74 +179,13 @@ moduleNameParser =
         )
 
 
-effectParser : Parser Context Error AST.Manager
-effectParser =
-    Parser.succeed identity
-        |> Parser.skip (Variable.keyword "where" (ExpectedKeyword "where"))
+removedHeaderParser : String -> Parser Context Error {}
+removedHeaderParser word =
+    Parser.succeed {}
+        |> Parser.skip (Variable.keyword word (ExpectedKeyword word))
         |> Parser.skip spaceParser
-        |> Parser.skip (Parser.chompChar '{' (ExpectedChar '{'))
-        |> Parser.skip spaceParser
-        |> Parser.keep
-            (Parser.oneOf
-                [ Parser.succeed
-                    (\cmd maybeSub ->
-                        when maybeSub is
-                            Just sub ->
-                                AST.Fx { cmd = cmd, sub = sub }
-
-                            Nothing ->
-                                AST.Cmd cmd
-                    )
-                    |> Parser.keep (cmdSubParser "command")
-                    |> Parser.skip spaceParser
-                    |> Parser.keep
-                        (Parser.oneOf
-                            [ Parser.succeed Just
-                                |> Parser.skip (Parser.chompChar ',' (ExpectedChar ','))
-                                |> Parser.skip spaceParser
-                                |> Parser.keep (cmdSubParser "subscription")
-                            , Parser.succeed Nothing
-                            ]
-                        )
-                , Parser.succeed
-                    (\sub maybeCmd ->
-                        when maybeCmd is
-                            Just cmd ->
-                                AST.Fx { cmd = cmd, sub = sub }
-
-                            Nothing ->
-                                AST.Sub sub
-                    )
-                    |> Parser.keep (cmdSubParser "subscription")
-                    |> Parser.skip spaceParser
-                    |> Parser.keep
-                        (Parser.oneOf
-                            [ Parser.succeed Just
-                                |> Parser.skip (Parser.chompChar ',' (ExpectedChar ','))
-                                |> Parser.skip spaceParser
-                                |> Parser.keep (cmdSubParser "command")
-                            , Parser.succeed Nothing
-                            ]
-                        )
-                ]
-            )
-        |> Parser.skip spaceParser
-        |> Parser.skip (Parser.chompChar '}' (ExpectedChar '}'))
-
-
-cmdSubParser : String -> Parser Context Error (SourcePosition.Located String)
-cmdSubParser fieldName =
-    Parser.succeed identity
-        |> Parser.skip (Parser.token fieldName (ExpectedKeyword fieldName))
-        |> Parser.skip spaceParser
-        |> Parser.skip (Parser.chompChar '=' (ExpectedChar '='))
-        |> Parser.skip spaceParser
-        |> Parser.keep ctorNameParser
-
-
-ctorNameParser : Parser Context Error (SourcePosition.Located String)
-ctorNameParser =
-    SourcePosition.parser (Parser.mapError VariableError Variable.upperCase)
+        |> Parser.skip (Variable.keyword "module" (ExpectedKeyword "module"))
+        |> Parser.andThen (\_ -> Parser.problem (RemovedModuleHeader (word ++ " module")))
 
 
 parseExposingStatement : Parser Context Error AST.Exposing
@@ -646,22 +566,6 @@ declarationToModulePrim : Declaration -> Maybe (AST.ModuleDeclaration AST.Prim)
 declarationToModulePrim decl =
     when decl.value is
         Declaration.Prim v ->
-            Just <|
-                SourcePosition.at
-                    decl.start
-                    v.signature.end
-                    { docs = decl.docs
-                    , value = v
-                    }
-
-        _ ->
-            Nothing
-
-
-declarationToModulePort : Declaration -> Maybe (AST.ModuleDeclaration AST.Port)
-declarationToModulePort decl =
-    when decl.value is
-        Declaration.Port v ->
             Just <|
                 SourcePosition.at
                     decl.start

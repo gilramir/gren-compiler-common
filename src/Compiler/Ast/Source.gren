@@ -22,7 +22,6 @@ module Compiler.Ast.Source exposing
     , Class
     , ClassMethod
     , Instance
-    , Port
     , Prim
     , Extern
     , ExternImpl
@@ -32,15 +31,13 @@ module Compiler.Ast.Source exposing
     , Exposed (..)
     , Privacy (..)
     , Import
-    , Effects (..)
-    , Manager (..)
     , Infix
     , BinopAssociativity (..)
     )
 
 {-| The Abstract Syntax Tree (AST) of Gren.
 
-@docs Expression, Expression_, VarType, IfBranch, WhenBranch, RecordField, Def, DefineRecord, Pattern, Pattern_, PRecordField, Type, Type_, TRecordField, Annotation, Constraint, Alias, Union, UnionVariant, Value, Class, ClassMethod, Instance, Port, Prim, Extern, ExternImpl, Module, ModuleDeclaration, Exposing, Exposed, Privacy, Import, Effects, Manager, Infix, BinopAssociativity
+@docs Expression, Expression_, VarType, IfBranch, WhenBranch, RecordField, Def, DefineRecord, Pattern, Pattern_, PRecordField, Type, Type_, TRecordField, Annotation, Constraint, Alias, Union, UnionVariant, Value, Class, ClassMethod, Instance, Prim, Extern, ExternImpl, Module, ModuleDeclaration, Exposing, Exposed, Privacy, Import, Infix, BinopAssociativity
 
 -}
 
@@ -357,14 +354,6 @@ type alias Instance =
   }
 
 
-{-|
--}
-type alias Port =
-  { name : SourcePosition.Located String
-  , signature : Type
-  }
-
-
 {-| `@prim("i32_add")` and the annotation under it (`core.md` C13).
 
 A primitive declaration is an annotation with no equation: what it is bound to
@@ -431,7 +420,6 @@ type alias Module =
   , prims : Array (ModuleDeclaration Prim)
   , externs : Array (ModuleDeclaration Extern)
   , binops : Array (SourcePosition.Located Infix)
-  , effects : Effects
   }
 
 
@@ -474,22 +462,6 @@ type alias Import =
   , expose : Exposing
   }
 
-
-{-|
--}
-type Effects
-  = NoEffects
-  | Ports (Array (ModuleDeclaration Port))
-  | Manager Manager
-
-
-{-|
--}
-type Manager
-  = Cmd (SourcePosition.Located String)
-  | Sub (SourcePosition.Located String)
-  | Fx { cmd : SourcePosition.Located String, sub : SourcePosition.Located String }
-  
 
 {-|
 -}

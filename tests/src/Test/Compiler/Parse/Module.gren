@@ -33,7 +33,6 @@ tests =
                     , unions = []
                     , aliases = []
                     , binops = []
-                    , effects = AST.NoEffects
                     }
         , test "Empty module with exposings (valid when parsing)" <| \_ ->
             Parser.run PM.parser Context.empty
@@ -83,121 +82,19 @@ tests =
                     , unions = []
                     , aliases = []
                     , binops = []
-                    , effects = AST.NoEffects
                     }
-        , test "the port keyword is optional (going away in future release)" <| \_ ->
+        , test "a `port module` is refused, naming what replaces it (D280)" <| \_ ->
             Parser.run PM.parser Context.empty
                 """
                 port module PortModule exposing (..)
                 """
-                |> expect
-                    { name =
-                        SourcePosition.at
-                            { row = 1, col = 13 }
-                            { row = 1, col = 23 }
-                            "PortModule"
-                    , exports = AST.Open
-                    , docs = Nothing
-                    , imports = []
-                    , values = []
-                    , classes = []
-                    , instances = []
-                    , unions = []
-                    , aliases = []
-                    , binops = []
-                    , effects = AST.NoEffects
-                    }
-        , test "effect module with defined cmd" <| \_ ->
+                |> expectRefused "port module"
+        , test "an `effect module` is refused before its `where` is read (D280)" <| \_ ->
             Parser.run PM.parser Context.empty
                 """
                 effect module CmdModule where { command = MyCmd } exposing (..)
                 """
-                |> expect
-                    { name =
-                        SourcePosition.at
-                            { row = 1, col = 15 }
-                            { row = 1, col = 24 }
-                            "CmdModule"
-                    , exports = AST.Open
-                    , docs = Nothing
-                    , imports = []
-                    , values = []
-                    , classes = []
-                    , instances = []
-                    , unions = []
-                    , aliases = []
-                    , binops = []
-                    , effects =
-                        SourcePosition.at
-                            { row = 1, col = 43 }
-                            { row = 1, col = 48 }
-                            "MyCmd"
-                            |> AST.Cmd
-                            |> AST.Manager
-                    }
-        , test "effect module with defined sub" <| \_ ->
-            Parser.run PM.parser Context.empty
-                """
-                effect module SubModule where { subscription = MySub } exposing (..)
-                """
-                |> expect
-                    { name =
-                        SourcePosition.at
-                            { row = 1, col = 15 }
-                            { row = 1, col = 24 }
-                            "SubModule"
-                    , exports = AST.Open
-                    , docs = Nothing
-                    , imports = []
-                    , values = []
-                    , classes = []
-                    , instances = []
-                    , unions = []
-                    , aliases = []
-                    , binops = []
-                    , effects =
-                        SourcePosition.at
-                            { row = 1, col = 48 }
-                            { row = 1, col = 53 }
-                            "MySub"
-                            |> AST.Sub
-                            |> AST.Manager
-                    }
-        , test "effect module with defined fx" <| \_ ->
-            Parser.run PM.parser Context.empty
-                """
-                effect module FxModule where { command = MyCmd, subscription = MySub } exposing (..)
-                """
-                |> expect
-                    { name =
-                        SourcePosition.at
-                            { row = 1, col = 15 }
-                            { row = 1, col = 23 }
-                            "FxModule"
-                    , exports = AST.Open
-                    , docs = Nothing
-                    , imports = []
-                    , values = []
-                    , classes = []
-                    , instances = []
-                    , unions = []
-                    , aliases = []
-                    , binops = []
-                    , effects =
-                        { cmd =
-                            SourcePosition.at
-                                { row = 1, col = 42 }
-                                { row = 1, col = 47 }
-                                "MyCmd"
-                        , sub =
-                            SourcePosition.at
-                                { row = 1, col = 64 }
-                                { row = 1, col = 69 }
-                                "MySub"
-                        }
-                            |> AST.Fx
-                            |> AST.Manager
-                    }
+                |> expectRefused "effect module"
         , test "Docs" <| \_ ->
             Parser.run PM.parser Context.empty
                 """
@@ -225,7 +122,6 @@ tests =
                     , unions = []
                     , aliases = []
                     , binops = []
-                    , effects = AST.NoEffects
                     }
         , test "imports" <| \_ ->
             Parser.run PM.parser Context.empty
@@ -261,7 +157,6 @@ tests =
                     , unions = []
                     , aliases = []
                     , binops = []
-                    , effects = AST.NoEffects
                     }
         , test "imports with alias" <| \_ ->
             Parser.run PM.parser Context.empty
@@ -297,7 +192,6 @@ tests =
                     , unions = []
                     , aliases = []
                     , binops = []
-                    , effects = AST.NoEffects
                     }
         , test "imports with alias and exposing" <| \_ ->
             Parser.run PM.parser Context.empty
@@ -355,7 +249,6 @@ tests =
                 , unions = []
                 , aliases = []
                 , binops = []
-                , effects = AST.NoEffects
                 }
         , test "imports end positions" <| \_ ->
             Parser.run PM.parser Context.empty
@@ -412,7 +305,6 @@ tests =
                 , unions = []
                 , aliases = []
                 , binops = []
-                , effects = AST.NoEffects
                 }
         , test "operators" <| \_ ->
             Parser.run PM.parser Context.empty
@@ -463,9 +355,8 @@ tests =
                             , precedence = 4
                             }
                         ]
-                     , effects = AST.NoEffects
                      }
-         , test "Module with values, type aliases, unions, and ports" <| \_ ->
+         , test "Module with values, type aliases and unions" <| \_ ->
              Parser.run PM.parser Context.empty
                  """
                  module MyValues exposing (..)
@@ -481,8 +372,6 @@ tests =
                  type Choice
                    = Left
                    | Right
-
-                 port somePort : String -> Cmd msg
                  """
                  |> expect
                      { name =
@@ -636,59 +525,6 @@ tests =
                             }
                          ]
                     , binops = []
-                    , effects =
-                        AST.Ports
-                            [ SourcePosition.at
-                                { row = 15, col = 1 }
-                                { row = 15, col = 34}
-                                { docs = Nothing
-                                , value =
-                                    { name =
-                                          SourcePosition.at
-                                              { row = 15, col = 6 }
-                                              { row = 15, col = 14 }
-                                              "somePort"
-                                    , signature =
-                                        SourcePosition.at
-                                            { row = 15, col = 17 }
-                                            { row = 15, col = 34 }
-                                            (AST.TLambda
-                                                { from =
-                                                    SourcePosition.at
-                                                        { row = 15, col = 17 }
-                                                        { row = 15, col = 23 }
-                                                        (AST.TType
-                                                            { name =
-                                                                SourcePosition.at
-                                                                    { row = 15, col = 17 }
-                                                                    { row = 15, col = 23 }
-                                                                    "String"
-                                                            , args = []
-                                                            }
-                                                        )
-                                                , to =
-                                                    SourcePosition.at
-                                                        { row = 15, col = 27 }
-                                                        { row = 15, col = 34 }
-                                                        (AST.TType
-                                                            { name =
-                                                                SourcePosition.at
-                                                                    { row = 15, col = 27 }
-                                                                    { row = 15, col = 30 }
-                                                                    "Cmd"
-                                                            , args =
-                                                                [ SourcePosition.at
-                                                                    { row = 15, col = 31 }
-                                                                    { row = 15, col = 34 }
-                                                                    (AST.TVar "msg")
-                                                                ]
-                                                            }
-                                                        )
-                                                }
-                                            )
-                                        }
-                                }
-                            ]
                     }
          , test "Declaration after when expression" <| \_ ->
              Parser.run PM.parser Context.empty
@@ -720,7 +556,6 @@ tests =
                     , classes = []
                     , instances = []
                     , unions = []
-                    , effects = AST.NoEffects
                     , values =
                         [ SourcePosition.at
                                 { row = 3, col = 1 }
@@ -1049,7 +884,6 @@ tests =
                     , unions = []
                     , aliases = []
                     , binops = []
-                    , effects = AST.NoEffects
                     }
         , describe "keyword boundaries"
             -- The module parser reached for `token` where every other parser
@@ -1063,6 +897,15 @@ tests =
 
                     importantThing =
                         1
+                    """
+                    |> expectOk
+            , test "a declaration named `port`, which is not a reserved word (D279)" <| \_ ->
+                Parser.run PM.parser Context.empty
+                    """
+                    module MyModule exposing (port)
+
+                    port =
+                        8080
                     """
                     |> expectOk
             , test "a declaration whose name starts with `port`" <| \_ ->
@@ -1210,6 +1053,18 @@ expectFirstStart expected result =
 
                 Nothing ->
                     Expect.fail "Expected at least one declaration"
+
+
+expectRefused : String -> Result (Array (Parser.DeadEnd c PM.Error)) a -> Expectation
+expectRefused header result =
+    when result is
+        Err deadEnds ->
+            Expect.equal
+                True
+                (Array.any (\deadEnd -> deadEnd.problem == PM.RemovedModuleHeader header) deadEnds)
+
+        Ok _ ->
+            Expect.fail ("a `" ++ header ++ "` was accepted")
 
 
 expectOk : Result (Array (Parser.DeadEnd c e)) a -> Expectation

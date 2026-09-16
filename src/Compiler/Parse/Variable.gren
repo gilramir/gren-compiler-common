@@ -100,7 +100,6 @@ reservedWords =
         , "import"
         , "exposing"
         , "as"
-        , "port"
         ]
 
 

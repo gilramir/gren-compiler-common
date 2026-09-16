@@ -44,7 +44,6 @@ type DeclarationValue
     | Value AST.Value
     | Class AST.Class
     | Instance AST.Instance
-    | Port AST.Port
     | Prim AST.Prim
     | Extern AST.Extern
 
@@ -200,7 +199,6 @@ declarationValueParser { docs, start, attribute } =
         NoAttribute ->
             Parser.oneOf
                 [ typeParser []
-                , portParser
                 , classParser
                 , instanceParser
                 , valueParser False start
@@ -810,24 +808,6 @@ variantLoopParser variants =
             |> Parser.keep variantParser
         , Parser.succeed (Parser.Done variants)
         ]
-
-
-portParser : Parser Context Error DeclarationValue
-portParser =
-    Parser.succeed
-        (\name tipe ->
-            Port
-                { name = name
-                , signature = tipe
-                }
-        )
-        |> Parser.skip (Variable.keyword "port" (ExpectedKeyword "port"))
-        |> Parser.skip spaceParser
-        |> Parser.keep (SourcePosition.parser lowerCaseVariable)
-        |> Parser.skip spaceParser
-        |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
-        |> Parser.skip spaceParser
-        |> Parser.keep (Parser.mapError TypeError Type.expression)
 
 
 {-| `@prim("i32_add")` and the annotation under it (`core.md` C13).

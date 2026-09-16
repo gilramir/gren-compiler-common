@@ -560,33 +560,13 @@ tests =
                         )
             ]
         , describe "Ports"
-            [ test "Simple case" <| \_ ->
+            [ test "a `port` declaration is not a declaration any more (D279)" <| \_ ->
                 Parser.run PD.parser Context.empty
                     """
                     port myOutput : String
                     """
-                    |> expect
-                        (PD.Port
-                            { name =
-                                SourcePosition.at
-                                    { row = 1, col = 6 }
-                                    { row = 1, col = 14 }
-                                    "myOutput"
-                            , signature =
-                                SourcePosition.at
-                                    { row = 1, col = 17 }
-                                    { row = 1, col = 23 }
-                                    (AST.TType
-                                        { name =
-                                            SourcePosition.at
-                                                { row = 1, col = 17 }
-                                                { row = 1, col = 23 }
-                                                "String"
-                                        , args = []
-                                        }
-                                    )
-                            }
-                        )
+                    |> Result.isOk
+                    |> Expect.equal False
             , test "Should stop parsing after type union, not consume following value" <| \_ ->
                 Parser.run PD.parser Context.empty
                     """
