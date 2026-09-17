@@ -1,6 +1,7 @@
 module Compiler.License exposing
     ( License
     , bsd3
+    , fromString
     , toString
     , toJson
     , jsonDecoder
@@ -10,7 +11,7 @@ module Compiler.License exposing
 
 {-| A module for working with OSI approved licenses.
 
-@docs License, bsd3, toString, toJson, jsonDecoder, findMostSimilar
+@docs License, bsd3, fromString, toString, toJson, jsonDecoder, findMostSimilar
 -}
 
 import Dict exposing (Dict)
@@ -44,6 +45,17 @@ toString (License value) =
 toJson : License -> Encode.Value
 toJson license =
     Encode.string (toString license)
+
+
+{-| The [License](#License) an SPDX identifier names, if it is an OSI approved one.
+-}
+fromString : String -> Maybe License
+fromString givenCode =
+    if Dict.member givenCode osiApprovedSpdxLicenses then
+        Just (License givenCode)
+
+    else
+        Nothing
 
 
 {-| JSON Decoder for [License](#License).

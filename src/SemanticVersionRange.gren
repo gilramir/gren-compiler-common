@@ -5,6 +5,7 @@ module SemanticVersionRange exposing
     , lowerBound
     , upperBound
     , intersect
+    , contains
     , compatibleWith
     , fromExact
     , fromString
@@ -24,7 +25,7 @@ module SemanticVersionRange exposing
 
 ## Query
 
-@docs lowerBound, upperBound, intersect
+@docs lowerBound, upperBound, intersect, contains
 
 ## Conversion
 
@@ -137,6 +138,15 @@ intersect left right =
 
                         GT ->
                             SemanticVersionRange { lower = lowerRight, upper = upperRight }
+
+
+{-| Whether a version is in the range: at or above its lower bound and below its
+upper bound.
+-}
+contains : SemanticVersion -> SemanticVersionRange -> Bool
+contains version (SemanticVersionRange { lower, upper }) =
+    SemanticVersion.compare lower version /= GT
+        && SemanticVersion.compare version upper == LT
 
 
 {-| Construct a [SemanticVersionRange](#SemanticVersionRange) that is compatible with the

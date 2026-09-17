@@ -4,10 +4,14 @@ module Compiler.PackageName exposing
     --
     , fromString
     , jsonDecoder
+    , isPrefix
+    , hasPrefix
+    , dropPrefix
     --
     , toString
     , toJson
     , toFileName
+    , escapePath
     , isCore
     --
     , core
@@ -24,9 +28,13 @@ module Compiler.PackageName exposing
 
 @docs fromString, jsonDecoder
 
+## Prefixes
+
+@docs isPrefix, hasPrefix, dropPrefix
+
 ## Conversions
 
-@docs toString, toJson, toFileName
+@docs toString, toJson, toFileName, escapePath
 
 ## Queries
 
@@ -124,6 +132,46 @@ notAtEitherEnd affix str =
     not (String.startsWith affix str) && not (String.endsWith affix str)
 
 
+{-| Whether a string can name a set of identifiers by their beginning: a host,
+then none or more path elements, as a `[sources]` key does. `git.corp.example`
+and `github.com/geng-language` are prefixes, and so is every identifier but
+`core`. A trailing slash is the caller's to remove.
+-}
+isPrefix : String -> Bool
+isPrefix str =
+    when Array.popFirst (String.split "/" str) is
+        Just { first = host, rest = path } ->
+            isHost host && Array.all isElement path
+
+        Nothing ->
+            False
+
+
+{-| Whether an identifier begins with a prefix, a whole path element at a time:
+`github.com/x/y` has `github.com/x` and itself, and not `github.com/x/`'s
+neighbour `github.com/xy`.
+-}
+hasPrefix : String -> PackageName -> Bool
+hasPrefix prefix (PackageName str) =
+    str == prefix || String.startsWith (prefix ++ "/") str
+
+
+{-| The path elements an identifier has past a prefix, joined by `/`, and empty
+when the prefix is the whole identifier. `Nothing` when it does not have the
+prefix.
+-}
+dropPrefix : String -> PackageName -> Maybe String
+dropPrefix prefix ((PackageName str) as name) =
+    if str == prefix then
+        Just ""
+
+    else if hasPrefix prefix name then
+        Just (String.dropFirst (String.count prefix + 1) str)
+
+    else
+        Nothing
+
+
 {-| A JSON decoder for [PackageName](#PackageName)
 -}
 jsonDecoder : Decoder PackageName
@@ -165,6 +213,14 @@ escaped name has no `__` in it, which leaves that free to separate a version.
 -}
 toFileName : PackageName -> String
 toFileName (PackageName str) =
+    escapePath str
+
+
+{-| [toFileName](#toFileName) for a string that is a prefix of identifiers
+rather than one, such as a repository root.
+-}
+escapePath : String -> String
+escapePath str =
     String.split "/" str
         |> Array.map
             (\segment ->

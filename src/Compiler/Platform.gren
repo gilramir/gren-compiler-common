@@ -3,6 +3,7 @@ module Compiler.Platform exposing
     , isCompatible
     --
     , toString
+    , fromString
     , toJson
     , jsonDecoder
     )
@@ -14,7 +15,7 @@ module Compiler.Platform exposing
 
 ## Value conversion
 
-@docs toString, toJson, jsonDecoder
+@docs toString, fromString, toJson, jsonDecoder
 -}
 
 import Json.Encode as Encode
@@ -46,6 +47,17 @@ toString platform =
         Common -> "common"
         Browser -> "browser"
         Node -> "node"
+
+
+{-| The [Platform](#Platform) a string names, the inverse of [toString](#toString).
+-}
+fromString : String -> Maybe Platform
+fromString value =
+    when value is
+        "common" -> Just Common
+        "browser" -> Just Browser
+        "node" -> Just Node
+        _ -> Nothing
 
 
 {-| Convert a [Platform](#Platform) value to it's JSON representation.

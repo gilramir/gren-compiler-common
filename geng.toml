@@ -1,0 +1,34 @@
+[package]
+name = "github.com/geng-language/compiler-common"
+version = "3.0.0"
+summary = "Common functionality of the Gren compiler"
+license = "BSD-3-Clause"
+geng = "0.6.0 <= v < 0.7.0"
+
+[platform]
+runtime = "any"
+
+[modules]
+exposed = [
+    "Compiler.Ast.Source",
+    "Compiler.Dependencies",
+    "Compiler.ModuleName",
+    "Compiler.PackageName",
+    "Compiler.Platform",
+    "Compiler.License",
+    "Compiler.Parse.Context",
+    "Compiler.Parse.Declaration",
+    "Compiler.Parse.Expression",
+    "Compiler.Parse.Module",
+    "Compiler.Parse.Number",
+    "Compiler.Parse.Operator",
+    "Compiler.Parse.String",
+    "Compiler.Parse.Space",
+    "Compiler.Parse.Pattern",
+    "Compiler.Parse.Variable",
+    "Compiler.Parse.Type",
+    "SemanticVersion",
+    "SemanticVersionRange",
+    "String.EditDistance",
+    "Compiler.SourcePosition",
+]

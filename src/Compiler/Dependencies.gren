@@ -1,97 +1,301 @@
 module Compiler.Dependencies exposing
-    ( SimplifiedOutline
-    , Solution(..)
-    , solve
+    ( Node
+    , Graph
+    , wanted
+    , select
+    , Conflict
+    , Because (..)
+    , check
     )
 
 
-{-| The algorithm for calculating the required dependencies of a project.
+{-| Minimal version selection: which version of each package a project is built
+with.
 
-@docs SimplifiedOutline, solve, Solution
+A dependency is a range, `1.2.0 <= v < 2.0.0`, and the version a range asks for
+is its lower bound. Every package that can be reached from the project is given
+the highest version anything reaching it asks for. That is Go's rule, and it has
+three properties a solver that searches for the newest compatible versions does
+not: it never backtracks, the same manifests always give the same answer whether
+or not a lock file exists, and a new release of a package changes nothing until
+someone raises a lower bound to it.
+
+The answer is found in three steps, and the loading between them is the
+caller's, since it is the part that reads files and talks to git:
+
+1.  [wanted](#wanted) says which versions to load next. The caller loads each
+    one's manifest and adds it to the graph, until nothing more is wanted.
+2.  [select](#select) chooses a version of each package, and leaves out a
+    package that only a version not chosen required.
+3.  [check](#check) says which ranges the choice falls outside of, since a
+    range's upper bound is not something the choice looks at.
+
+A package can be **pinned**: a `[sources]` entry says where it is, and the
+version is whatever its manifest says. A pinned package is loaded at that
+version only, and a range that does not contain it is a conflict like any other.
+
+@docs Node, Graph, wanted, select, Conflict, Because, check
 -}
 
-import Compiler.PackageName as PackageName exposing (PackageName)
 import Dict exposing (Dict)
 import SemanticVersion exposing (SemanticVersion)
 import SemanticVersionRange exposing (SemanticVersionRange)
 
 
-{-| A simlified outline only contains the information that is required by the algorithm.
+{-| One version of one package, and what its manifest requires.
 -}
-type alias SimplifiedOutline =
-    { name : PackageName
-    , version : SemanticVersionRange
+type alias Node =
+    { name : String
+    , version : SemanticVersion
     , dependencies : Dict String SemanticVersionRange
     }
 
 
-{-| Let's you know if you've got all the required dependencies,
-or if you're missing something.
+{-| Everything known: the root's requirements, the pinned packages' versions, and
+every version loaded so far.
 -}
-type Solution
-    = Complete
-    | Missing { name : PackageName, version : SemanticVersionRange }
-    | Conflict { name : PackageName, version1 : SemanticVersionRange, version2 : SemanticVersionRange }
+type alias Graph =
+    { root : Dict String SemanticVersionRange
+    , pinned : Dict String SemanticVersion
+    , nodes : Array Node
+    }
 
 
-{-| Calculate the required dependencies of a project.
+{-| The versions a requirement in the graph asks for that are not loaded yet,
+without repeats and in order of name and then version.
+
+A requirement asks for its range's lower bound, or for the pinned version.
+Every loaded version's requirements count, including one that will not be
+chosen: a version is read before anything knows it will be passed over, and
+leaving its requirements out would make the answer depend on the order things
+were loaded in.
 -}
-solve : Array { name : PackageName, version : SemanticVersionRange } -> Dict String SimplifiedOutline -> Solution
-solve rootRequirements loadedOutlines =
-    solveHelp rootRequirements Dict.empty loadedOutlines
-
-
-solveHelp
-    : Array { name : PackageName, version : SemanticVersionRange }
-    -> Dict String SimplifiedOutline
-    -> Dict String SimplifiedOutline
-    -> Solution
-solveHelp pending solved loaded =
-    when Array.popFirst pending is
-        Nothing ->
-            Complete
-
-        Just { first = { name = packageName, version = packageVersion }, rest } ->
-            let
-                packageNameStr =
-                    PackageName.toString packageName
-            in
-            when Dict.get packageNameStr solved is
-                Just outline ->
-                    when SemanticVersionRange.intersect outline.version packageVersion is
-                        Nothing ->
-                            Conflict
-                                { name = outline.name
-                                , version1 = outline.version
-                                , version2 = packageVersion
-                                }
-
-                        Just intersectedVersion ->
-                            solveHelp
-                                rest
-                                (Dict.set packageNameStr { outline | version = intersectedVersion } solved)
-                                loaded
+wanted : Graph -> Array { name : String, version : SemanticVersion }
+wanted graph =
+    let
+        asked name range =
+            when Dict.get name graph.pinned is
+                Just version ->
+                    version
 
                 Nothing ->
-                    when Dict.get packageNameStr loaded is
-                        Nothing ->
-                            Missing
-                                { name = packageName
-                                , version = packageVersion
-                                }
+                    SemanticVersionRange.lowerBound range
 
-                        Just outline ->
-                            let
-                                newPending =
-                                    outline.dependencies
-                                        |> Dict.foldl
-                                            (\name version acc ->
-                                                Array.pushLast
-                                                    { name = PackageName.fromString name |> Maybe.withDefault PackageName.example
-                                                    , version = version
-                                                    }
-                                                    acc
-                                            )
-                                            rest
-                            in
-                            solveHelp newPending (Dict.set packageNameStr outline solved) loaded
+        requirements =
+            Array.foldl
+                (\node acc -> Array.pushLast node.dependencies acc)
+                [ graph.root ]
+                graph.nodes
+
+        isLoaded name version =
+            Array.any (\node -> node.name == name && node.version == version) graph.nodes
+    in
+    requirements
+        |> Array.foldl
+            (\deps acc ->
+                Dict.foldl
+                    (\name range inner ->
+                        let
+                            version =
+                                asked name range
+
+                            key =
+                                name ++ "@" ++ SemanticVersion.toString version
+                        in
+                        if isLoaded name version then
+                            inner
+
+                        else
+                            Dict.set key { name = name, version = version } inner
+                    )
+                    acc
+                    deps
+            )
+            Dict.empty
+        |> Dict.values
+        |> Array.sortWith
+            (\a b ->
+                when compare a.name b.name is
+                    EQ ->
+                        SemanticVersion.compare a.version b.version
+
+                    order ->
+                        order
+            )
+
+
+{-| The version each package is built with, once nothing more is
+[wanted](#wanted): the pinned version, or else the highest version loaded.
+
+Only the packages the root reaches through the chosen versions are in the
+answer. A package that a passed-over version required, and nothing chosen does,
+is not built.
+-}
+select : Graph -> Dict String SemanticVersion
+select graph =
+    let
+        highest =
+            Array.foldl
+                (\node acc ->
+                    when Dict.get node.name acc is
+                        Just version ->
+                            if SemanticVersion.compare node.version version == GT then
+                                Dict.set node.name node.version acc
+
+                            else
+                                acc
+
+                        Nothing ->
+                            Dict.set node.name node.version acc
+                )
+                Dict.empty
+                graph.nodes
+
+        chosen =
+            Dict.union graph.pinned highest
+
+        reach pending acc =
+            when Array.popFirst pending is
+                Nothing ->
+                    acc
+
+                Just { first = name, rest } ->
+                    if Dict.member name acc then
+                        reach rest acc
+
+                    else
+                        when Dict.get name chosen is
+                            Nothing ->
+                                reach rest acc
+
+                            Just version ->
+                                let
+                                    next =
+                                        when nodeAt graph name version is
+                                            Just node ->
+                                                Dict.keys node.dependencies
+
+                                            Nothing ->
+                                                []
+                                in
+                                reach (rest ++ next) (Dict.set name version acc)
+    in
+    reach (Dict.keys graph.root) Dict.empty
+
+
+nodeAt : Graph -> String -> SemanticVersion -> Maybe Node
+nodeAt graph name version =
+    Array.findFirst (\node -> node.name == name && node.version == version) graph.nodes
+        |> Maybe.map .value
+
+
+{-| A range the selection falls outside of: the package, the version chosen, who
+asked for the range, and why that version was chosen.
+
+`requiredBy` is `Nothing` for the root. `chosenBecause` is the requirement whose
+lower bound the chosen version is: `Pinned` when `[sources]` gave the version,
+`AskedByRoot` when the root asked for it, and `AskedBy` a loaded version
+otherwise, the first in order of name and version.
+-}
+type alias Conflict =
+    { name : String
+    , selected : SemanticVersion
+    , range : SemanticVersionRange
+    , requiredBy : Maybe { name : String, version : SemanticVersion }
+    , chosenBecause : Because
+    }
+
+
+{-| Why a version was chosen. See [Conflict](#Conflict).
+-}
+type Because
+    = Pinned
+    | AskedByRoot
+    | AskedBy { name : String, version : SemanticVersion }
+
+
+{-| Every range in the root and in a chosen version that does not contain the
+version chosen, in order of the package and then of who asked. An empty array
+means the selection builds.
+-}
+check : Graph -> Dict String SemanticVersion -> Array Conflict
+check graph selection =
+    let
+        conflictsIn requiredBy deps =
+            Dict.foldl
+                (\name range acc ->
+                    when Dict.get name selection is
+                        Just selected ->
+                            if SemanticVersionRange.contains selected range then
+                                acc
+
+                            else
+                                Array.pushLast
+                                    { name = name
+                                    , selected = selected
+                                    , range = range
+                                    , requiredBy = requiredBy
+                                    , chosenBecause = because name selected
+                                    }
+                                    acc
+
+                        Nothing ->
+                            acc
+                )
+                []
+                deps
+
+        because name selected =
+            let
+                asks deps =
+                    Dict.get name deps
+                        |> Maybe.map (\range -> SemanticVersionRange.lowerBound range == selected)
+                        |> Maybe.withDefault False
+            in
+            if Dict.member name graph.pinned then
+                Pinned
+
+            else if asks graph.root then
+                AskedByRoot
+
+            else
+                graph.nodes
+                    |> Array.keepIf (\node -> asks node.dependencies)
+                    |> Array.sortWith
+                        (\a b ->
+                            when compare a.name b.name is
+                                EQ ->
+                                    SemanticVersion.compare a.version b.version
+
+                                order ->
+                                    order
+                        )
+                    |> Array.first
+                    |> Maybe.map (\node -> AskedBy { name = node.name, version = node.version })
+                    |> Maybe.withDefault AskedByRoot
+
+        fromNodes =
+            Dict.foldl
+                (\name version acc ->
+                    when nodeAt graph name version is
+                        Just node ->
+                            acc ++ conflictsIn (Just { name = name, version = version }) node.dependencies
+
+                        Nothing ->
+                            acc
+                )
+                []
+                selection
+    in
+    (conflictsIn Nothing graph.root ++ fromNodes)
+        |> Array.sortWith
+            (\a b ->
+                when compare a.name b.name is
+                    EQ ->
+                        compare
+                            (Maybe.map .name a.requiredBy |> Maybe.withDefault "")
+                            (Maybe.map .name b.requiredBy |> Maybe.withDefault "")
+
+                    order ->
+                        order
+            )
