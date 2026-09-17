@@ -2,14 +2,13 @@ module Compiler.PackageName exposing
     ( PackageName
     , example
     --
-    , author
-    , name
-    --
     , fromString
     , jsonDecoder
     --
     , toString
     , toJson
+    , toFileName
+    , isCore
     --
     , core
     , browser
@@ -25,13 +24,13 @@ module Compiler.PackageName exposing
 
 @docs fromString, jsonDecoder
 
-## Queries
-
-@docs author, name
-
 ## Conversions
 
-@docs toString, toJson
+@docs toString, toJson, toFileName
+
+## Queries
+
+@docs isCore
 
 ## Common package names
 
@@ -44,75 +43,58 @@ import Json.Encode as Json
 import Json.Decode as Decode exposing (Decoder)
 
 
-{-| An example package name. Useful for tests.
+{-| An example package identifier. Useful for tests.
 -}
 example : PackageName
 example =
-    PackageName { author = "example", name = "package" }
+    PackageName "example.com/example/package"
 
 
-{-| A package is identified by a string in the following format:
+{-| A package is identified by where it lives: a URL path, which is the host and
+then the path to the package within its repository.
 
-    author/name
+    github.com/geng-language/node
+    gitlab.com/acme/tooling/argparse
+    git.corp.example/team/pkg.git/sub
 
-Where `author` represents the person, or organization, that built the package, and
-`name` is... well, a name. A name should ideally describe the purpose of the package.
+The one exception is `core`, which has no host because the toolchain distributes
+it. (Geng's `packaging.md` K7.)
 
-Both `author` and `name` can contain alphanumeric characters and a single dash as a seperator,
-but no other characters.
+An identifier was an `author/name` pair, which is Gren's shape and says the
+package is on GitHub. A package below its repository's root has as many parts as
+its path does, so the identifier is one string.
 -}
 @derive(Eq)
 type PackageName
-    = PackageName 
-        { author : String
-        , name : String
-        }
-
-
-{-| Retrieve the package author.
--}
-author : PackageName -> String
-author (PackageName fields) =
-    fields.author
-
-
-{-| Retrieve the package name.
--}
-name : PackageName -> String
-name (PackageName fields) =
-    fields.name
+    = PackageName String
 
 
 {-| Attempt to convert a `String` into [PackageName](#PackageName).
+
+It is `core`, or a host and one or more path elements. The host is lower case,
+has a dot in it and neither begins nor ends with a dot or a hyphen. A path
+element is ASCII letters, digits, `.`, `_` and `-`, is not empty and neither
+begins nor ends with a dot, so `.` and `..` are not elements. There is no scheme
+and no trailing slash.
 -}
 fromString : String -> Maybe PackageName
 fromString str =
-    when String.split "/" str is
-        [ authorStr, nameStr ] ->
-            let
-                validAuthor =
-                    (not <| String.isEmpty authorStr)
-                        && (not <| String.startsWith "-" authorStr)
-                        && (not <| String.endsWith "-" authorStr)
-                        && (not <| String.contains "--" authorStr)
-                        && String.all (\c -> c == '-' || Char.isAlphaNum c) authorStr
-                    
-                validName =
-                    (not <| String.isEmpty nameStr)
-                        && (not <| String.startsWith "-" nameStr)
-                        && (not <| String.endsWith "-"  nameStr)
-                        && (not <| String.contains "--"  nameStr)
-                        && String.all (\c -> Char.isDigit c || Char.isLower c || c == '-') nameStr
-            in
-            if validAuthor && validName then
-                when String.popFirst nameStr is
-                    Just { first = firstChar } ->
-                        if Char.isAlpha firstChar then
-                            Just <|
-                                PackageName
-                                    { author = authorStr
-                                    , name = nameStr
-                                    }
+    if str == "core" then
+        Just (PackageName str)
+
+    else
+        when String.split "/" str is
+            [] ->
+                Nothing
+
+            [ _ ] ->
+                Nothing
+
+            segments ->
+                when Array.popFirst segments is
+                    Just { first = host, rest = path } ->
+                        if isHost host && Array.all isElement path then
+                            Just (PackageName str)
 
                         else
                             Nothing
@@ -120,11 +102,26 @@ fromString str =
                     Nothing ->
                         Nothing
 
-            else
-                Nothing
 
-        _ ->
-            Nothing
+isHost : String -> Bool
+isHost host =
+    String.contains "." host
+        && String.all (\c -> Char.isLower c || Char.isDigit c || c == '.' || c == '-') host
+        && not (String.contains ".." host)
+        && notAtEitherEnd "." host
+        && notAtEitherEnd "-" host
+
+
+isElement : String -> Bool
+isElement element =
+    not (String.isEmpty element)
+        && String.all (\c -> Char.isAlpha c || Char.isDigit c || c == '.' || c == '_' || c == '-') element
+        && notAtEitherEnd "." element
+
+
+notAtEitherEnd : String -> String -> Bool
+notAtEitherEnd affix str =
+    not (String.startsWith affix str) && not (String.endsWith affix str)
 
 
 {-| A JSON decoder for [PackageName](#PackageName)
@@ -139,15 +136,15 @@ jsonDecoder =
                         Decode.succeed packageName
 
                     Nothing ->
-                        Decode.fail ("Not a valid package name: " ++ strValue)
+                        Decode.fail ("Not a valid package identifier: " ++ strValue)
             )
 
 
 {-| Turn [PackageName](#PackageName) into a `String`.
 -}
 toString : PackageName -> String
-toString package =
-    author package ++ "/" ++ name package
+toString (PackageName str) =
+    str
 
 
 {-| Turn [PackageName](#PackageName) into `Json`.
@@ -157,22 +154,51 @@ toJson package =
     Json.string <| toString package
 
 
-{-| `gren-lang/core`
+{-| The identifier as one file name, for a directory or a bundle named after the
+package.
+
+Each path element is escaped as Geng's generated names escape it (D296): `_` is
+`_u`, `.` is `_d` and `-` is `_h`. The escaped elements are joined by `-`, which
+none of them contains, so two identifiers never share a file name.
+`github.com/geng-language/node` is `github_dcom-geng_hlanguage-node`, and an
+escaped name has no `__` in it, which leaves that free to separate a version.
+-}
+toFileName : PackageName -> String
+toFileName (PackageName str) =
+    String.split "/" str
+        |> Array.map
+            (\segment ->
+                segment
+                    |> String.replace "_" "_u"
+                    |> String.replace "." "_d"
+                    |> String.replace "-" "_h"
+            )
+        |> String.join "-"
+
+
+{-| Whether this is `core`, which every project has and no manifest lists.
+-}
+isCore : PackageName -> Bool
+isCore package =
+    package == core
+
+
+{-| `core`
 -}
 core : PackageName
 core =
-    PackageName { author = "gren-lang", name = "core" }
+    PackageName "core"
 
 
-{-| `gren-lang/browser`
+{-| `github.com/geng-language/browser`
 -}
 browser : PackageName
 browser =
-    PackageName { author = "gren-lang", name = "browser" }
+    PackageName "github.com/geng-language/browser"
 
 
-{-| `gren-lang/node`
+{-| `github.com/geng-language/node`
 -}
 node : PackageName
 node =
-    PackageName { author = "gren-lang", name = "node" }
+    PackageName "github.com/geng-language/node"

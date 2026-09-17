@@ -1,7 +1,7 @@
 {
     "type": "package",
     "platform": "common",
-    "name": "gren-lang/compiler-common",
+    "name": "github.com/geng-language/compiler-common",
     "summary": "Common functionality of the Gren compiler",
     "license": "BSD-3-Clause",
     "version": "3.0.0",
@@ -29,7 +29,5 @@
         "Compiler.SourcePosition"
     ],
     "gren-version": "0.6.0 <= v < 0.7.0",
-    "dependencies": {
-        "gren-lang/core": "7.4.0 <= v < 8.0.0"
-    }
+    "dependencies": {}
 }
