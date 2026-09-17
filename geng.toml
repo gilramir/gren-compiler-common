@@ -15,6 +15,7 @@ exposed = [
     "Compiler.ModuleName",
     "Compiler.PackageName",
     "Compiler.Platform",
+    "Compiler.Runtime",
     "Compiler.License",
     "Compiler.Parse.Context",
     "Compiler.Parse.Declaration",

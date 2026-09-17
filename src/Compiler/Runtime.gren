@@ -1,0 +1,152 @@
+module Compiler.Runtime exposing
+    ( Runtime (..)
+    , parent
+    , isAtOrBelow
+    --
+    , toString
+    , fromString
+    , fromPlatform
+    , toPlatform
+    , isBuilt
+    )
+
+
+{-| The runtime axis, D24's hierarchy.
+
+    any ─┬─ browser
+         ├─ node
+         ├─ beam
+         ├─ os ───┬─ linux
+         │        ├─ darwin
+         │        └─ windows
+         └─ host
+
+A package declares the most general runtime it works on, and a build is
+compatible with it when the build's runtime is at or below that one. The
+compiler builds for `any`, `browser` and `node`, which are the three
+[Platform](Compiler.Platform#Platform)s, and a package may declare any of the
+nine.
+
+@docs Runtime, parent, isAtOrBelow
+
+## Value conversion
+
+@docs toString, fromString, fromPlatform, toPlatform, isBuilt
+-}
+
+import Compiler.Platform as Platform exposing (Platform)
+
+
+{-| A runtime, as `geng.toml` names it.
+-}
+type Runtime
+    = Any
+    | Browser
+    | Node
+    | Beam
+    | Os
+    | Linux
+    | Darwin
+    | Windows
+    | Host
+
+
+{-| The runtime directly above this one, and nothing above `any`.
+-}
+parent : Runtime -> Maybe Runtime
+parent runtime =
+    when runtime is
+        Any ->
+            Nothing
+
+        Linux ->
+            Just Os
+
+        Darwin ->
+            Just Os
+
+        Windows ->
+            Just Os
+
+        _ ->
+            Just Any
+
+
+{-| Whether a build for the first runtime can use a package declaring the
+second: the second is the first or above it.
+-}
+isAtOrBelow : Runtime -> Runtime -> Bool
+isAtOrBelow build declared =
+    if build == declared then
+        True
+
+    else
+        when parent build is
+            Just above ->
+                isAtOrBelow above declared
+
+            Nothing ->
+                False
+
+
+{-| The name `geng.toml` writes.
+-}
+toString : Runtime -> String
+toString runtime =
+    when runtime is
+        Any -> "any"
+        Browser -> "browser"
+        Node -> "node"
+        Beam -> "beam"
+        Os -> "os"
+        Linux -> "linux"
+        Darwin -> "darwin"
+        Windows -> "windows"
+        Host -> "host"
+
+
+{-| The runtime a name names, the inverse of [toString](#toString).
+-}
+fromString : String -> Maybe Runtime
+fromString value =
+    when value is
+        "any" -> Just Any
+        "browser" -> Just Browser
+        "node" -> Just Node
+        "beam" -> Just Beam
+        "os" -> Just Os
+        "linux" -> Just Linux
+        "darwin" -> Just Darwin
+        "windows" -> Just Windows
+        "host" -> Just Host
+        _ -> Nothing
+
+
+{-| The runtime a platform is: `common` was `any`.
+-}
+fromPlatform : Platform -> Runtime
+fromPlatform platform =
+    when platform is
+        Platform.Common -> Any
+        Platform.Browser -> Browser
+        Platform.Node -> Node
+
+
+{-| The platform the compiler builds a runtime as, if it builds for it.
+-}
+toPlatform : Runtime -> Maybe Platform
+toPlatform runtime =
+    when runtime is
+        Any -> Just Platform.Common
+        Browser -> Just Platform.Browser
+        Node -> Just Platform.Node
+        _ -> Nothing
+
+
+{-| Whether the compiler builds for a runtime.
+-}
+isBuilt : Runtime -> Bool
+isBuilt runtime =
+    when toPlatform runtime is
+        Just _ -> True
+        Nothing -> False
