@@ -51,9 +51,9 @@ type Outcome
 
 {-| The type a literal's suffix names (`docs/syntax.md` S5, D154).
 
-`42i64`, `42u32`, `42u64` and `1.5f32` are the four spellings, and the suffix
-is a **type ascription written on the literal**: it says which of D2's types the
-literal has, and it is accepted wherever the corresponding annotation would be.
+`42i64`, `42u32`, `42u64` and `1.5f32` are D2's four spellings, `42i8`,
+`42u8`, `42i16` and `42u16` are D342's, and the suffix is a **type ascription
+written on the literal**: it says which of the sized types the literal has, and it is accepted wherever the corresponding annotation would be.
 This parser does not type-check, so it accepts every suffix on every numeric
 literal and lets the frontend say that `1.5i64` is a mismatch -- which is what
 keeps D86's two grammars the same grammar.
@@ -71,6 +71,10 @@ type Suffix
     | U32
     | U64
     | F32
+    | I8
+    | U8
+    | I16
+    | U16
 
 
 {-| The suffix as it is written, without the number in front of it.
@@ -89,6 +93,18 @@ suffixToString suffix =
 
         F32 ->
             "f32"
+
+        I8 ->
+            "i8"
+
+        U8 ->
+            "u8"
+
+        I16 ->
+            "i16"
+
+        U16 ->
+            "u16"
 
 
 {-| The kind of errors that can happen while parsing numbers.
@@ -141,14 +157,11 @@ parser =
             |> Parser.keep zeroOrHigher
         , zeroOrHigher
         ]
-        |> Parser.andThen
-            (\successCase ->
-                Parser.oneOf
-                    [ Parser.chompIf Char.isAlpha NotANumber
-                        |> Parser.andThen (\_ -> Parser.problem NotANumber)
-                    , Parser.succeed successCase
-                    ]
-            )
+
+
+isDirtyEnd : Char -> Bool
+isDirtyEnd char =
+    Char.isAlphaNum char || char == '_'
 
 
 {-| Like `parser`, but does not support negative numbers.
@@ -160,11 +173,26 @@ zeroOrHigher =
             (\outcome ->
                 Parser.map (\suffix -> withSuffix suffix outcome) suffixParser
             )
+        |> Parser.andThen
+            (\successCase ->
+                -- What the Haskell parser's `isDirtyEnd` refuses: a letter, a
+                -- digit or an underscore. A digit cannot follow the digits
+                -- themselves, but it can follow a suffix, and without it
+                -- `42i640` read as `42i64 0` (docs/m1b-narrow-int.md §NI2.5).
+                -- It is here rather than in `parser` so that a pattern, which
+                -- reads a number through this one, is held to it as well.
+                Parser.oneOf
+                    [ Parser.chompIf isDirtyEnd NotANumber
+                        |> Parser.andThen (\_ -> Parser.problem NotANumber)
+                    , Parser.succeed successCase
+                    ]
+            )
 
 
-{-| An optional suffix, read after the digits and before the "no letter may
-follow a number" guard in [parser](#parser) -- which is what makes `42i64` one
-token and `42abc` still an error.
+{-| An optional suffix, read after the digits and before the guard in
+[zeroOrHigher](#zeroOrHigher) that nothing a name could be made of may follow a
+number -- which is what makes `42i64` one token and `42abc` and `42i640` still
+errors.
 -}
 suffixParser : Parser Context Error (Maybe Suffix)
 suffixParser =
@@ -177,6 +205,14 @@ suffixParser =
             |> Parser.map (\_ -> Just U64)
         , Parser.token "f32" NotANumber
             |> Parser.map (\_ -> Just F32)
+        , Parser.token "i16" NotANumber
+            |> Parser.map (\_ -> Just I16)
+        , Parser.token "u16" NotANumber
+            |> Parser.map (\_ -> Just U16)
+        , Parser.token "i8" NotANumber
+            |> Parser.map (\_ -> Just I8)
+        , Parser.token "u8" NotANumber
+            |> Parser.map (\_ -> Just U8)
         , Parser.succeed Nothing
         ]
 
