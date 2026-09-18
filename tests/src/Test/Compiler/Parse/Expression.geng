@@ -1,5 +1,6 @@
 module Test.Compiler.Parse.Expression exposing ( tests )
 
+import Test.Compiler.Parse.Run as Run
 import Expect exposing (Expectation)
 import Test exposing (Test, describe, test, fuzz)
 import Fuzz exposing (Fuzzer)
@@ -16,52 +17,52 @@ tests =
     describe "Parse.Expression"
         [ describe "Primitives"
             [ test "Int" <| \_ ->
-                Parser.run PE.parser Context.empty "5"
-                    |> expectExpression (AST.NumberLiteral (Number.Integer 5))
+                Run.run PE.parser Context.empty "5"
+                    |> expectExpression (AST.NumberLiteral (Number.Integer { text = "5", suffix = Nothing }))
             , test "Negative Int" <| \_ ->
-                Parser.run PE.parser Context.empty "-15"
+                Run.run PE.parser Context.empty "-15"
                     |> expectExpression
                         (AST.Negate
                             { start = { row = 1, col = 2 }
                             , end = { row = 1, col = 4 }
-                            , value = AST.NumberLiteral (Number.Integer 15)
+                            , value = AST.NumberLiteral (Number.Integer { text = "15", suffix = Nothing })
                             }
                         )
             , test "Float" <| \_ ->
-                Parser.run PE.parser Context.empty "3.14"
-                    |> expectExpression (AST.NumberLiteral (Number.FloatingPoint { val = 3.14, text = "3.14" }))
+                Run.run PE.parser Context.empty "3.14"
+                    |> expectExpression (AST.NumberLiteral (Number.FloatingPoint { val = 3.14, text = "3.14", suffix = Nothing }))
             , test "Hex" <| \_ ->
-                Parser.run PE.parser Context.empty "0xDE"
-                    |> expectExpression (AST.NumberLiteral (Number.Hex 0xDE))
+                Run.run PE.parser Context.empty "0xDE"
+                    |> expectExpression (AST.NumberLiteral (Number.Hex { text = "0xDE", suffix = Nothing }))
             , test "Char" <| \_ ->
-                Parser.run PE.parser Context.empty "'z'"
+                Run.run PE.parser Context.empty "'z'"
                     |> expectExpression (AST.CharLiteral 'z')
             , test "String" <| \_ ->
-                Parser.run PE.parser Context.empty "\"test\""
+                Run.run PE.parser Context.empty "\"test\""
                     |> expectExpression (AST.StringLiteral "test")
             , test "Ctor" <| \_ ->
-                Parser.run PE.parser Context.empty "True"
+                Run.run PE.parser Context.empty "True"
                     |> expectExpression (AST.Var { name = "True", varType = AST.CapVar })
             , test "var name" <| \_ ->
-                Parser.run PE.parser Context.empty "myvar"
+                Run.run PE.parser Context.empty "myvar"
                     |> expectExpression (AST.Var { name = "myvar", varType = AST.LowVar })
             , test "qualified var" <| \_ ->
-                Parser.run PE.parser Context.empty "My.var"
+                Run.run PE.parser Context.empty "My.var"
                     |> expectExpression (AST.VarQual { name = "var", qualifier = "My", varType = AST.LowVar })
             , test "more qualified var" <| \_ ->
-                Parser.run PE.parser Context.empty "My.Nested.var"
+                Run.run PE.parser Context.empty "My.Nested.var"
                     |> expectExpression (AST.VarQual { name = "var", qualifier = "My.Nested", varType = AST.LowVar })
             , test "qualified type" <| \_ ->
-                Parser.run PE.parser Context.empty "My.Custom.Type"
+                Run.run PE.parser Context.empty "My.Custom.Type"
                     |> expectExpression (AST.VarQual { name = "Type", qualifier = "My.Custom", varType = AST.CapVar })
             , test "accessor" <| \_ ->
-                Parser.run PE.parser Context.empty ".field"
+                Run.run PE.parser Context.empty ".field"
                     |> expectExpression (AST.Accessor "field")
             , test "wildcard error" <| \_ ->
-                Parser.run PE.parser Context.empty "_unused"
+                Run.run PE.parser Context.empty "_unused"
                     |> expectErr PE.WildcardAttempt
             , test "nested accessors" <| \_ ->
-                Parser.run PE.parser Context.empty "nested.accessor.expression"
+                Run.run PE.parser Context.empty "nested.accessor.expression"
                     |> expectLocatedExpression
                         (SourcePosition.at
                             { row = 1, col = 1 }
@@ -85,7 +86,7 @@ tests =
                             )
                         )
             , test "Accessor after qualified var" <| \_ ->
-                Parser.run PE.parser Context.empty "Nested.accessor.expression"
+                Run.run PE.parser Context.empty "Nested.accessor.expression"
                     |> expectLocatedExpression
                         (SourcePosition.at
                             { row = 1, col = 1 }
@@ -106,7 +107,7 @@ tests =
                             )
                         )
             , test "accessor after record literal" <| \_ ->
-                Parser.run PE.parser Context.empty "{ a = 1 }.a"
+                Run.run PE.parser Context.empty "{ a = 1 }.a"
                     |> expectLocatedExpression
                         (SourcePosition.at
                             { row = 1, col = 1 }
@@ -126,7 +127,7 @@ tests =
                                                     SourcePosition.at
                                                         { row = 1, col = 7 }
                                                         { row = 1, col = 8 }
-                                                        (AST.NumberLiteral (Number.Integer 1))
+                                                        (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                               }
                                             ]
                                         )
@@ -135,7 +136,7 @@ tests =
                             )
                         )
             , test "function calls" <| \_ ->
-                Parser.run PE.parser Context.empty "func a b"
+                Run.run PE.parser Context.empty "func a b"
                     |> expectExpression
                         (AST.Call
                             { fn =
@@ -156,7 +157,7 @@ tests =
                             }
                         )
             , test "function call over multiple lines" <| \_ ->
-                Parser.run PE.parser Context.empty
+                Run.run PE.parser Context.empty
                     """
                     func
                         a
@@ -182,7 +183,7 @@ tests =
                             }
                         )
             , test "function calls (with parens)" <| \_ ->
-                Parser.run PE.parser Context.empty "foo a (bar b)"
+                Run.run PE.parser Context.empty "foo a (bar b)"
                     |> expectExpression
                         (AST.Call
                             { fn =
@@ -221,7 +222,7 @@ tests =
                             }
                         )
             , test "function with operator as argument" <| \_ ->
-                Parser.run PE.parser Context.empty "func (+)"
+                Run.run PE.parser Context.empty "func (+)"
                     |> expectExpression
                         (AST.Call
                             { fn =
@@ -244,7 +245,7 @@ tests =
                             }
                         )
             , test "function calls with lambda" <| \_ ->
-                Parser.run PE.parser Context.empty "myFunc a \\b -> b + 1"
+                Run.run PE.parser Context.empty "myFunc a \\b -> b + 1"
                     |> expectExpression
                         (AST.Call
                             { fn =
@@ -286,7 +287,7 @@ tests =
                                                         SourcePosition.at
                                                             { row = 1, col = 20 }
                                                             { row = 1, col = 21 }
-                                                            (AST.NumberLiteral (Number.Integer 1))
+                                                            (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                                     }
                                                 )
                                         }
@@ -295,7 +296,7 @@ tests =
                             }
                         )
             , test "accessor after function call" <| \_ ->
-                Parser.run PE.parser Context.empty "(func a b).c"
+                Run.run PE.parser Context.empty "(func a b).c"
                     |> expectLocatedExpression
                         (SourcePosition.at
                             { row = 1, col = 1 }
@@ -334,7 +335,7 @@ tests =
                             )
                         )
             , test "function calls with when-is as argument" <| \_ ->
-                Parser.run PE.parser Context.empty
+                Run.run PE.parser Context.empty
                     """
                     myFunc 1 2 <|
                       when x is
@@ -357,11 +358,11 @@ tests =
                                             [ SourcePosition.at
                                                 { row = 1, col = 8 }
                                                 { row = 1, col = 9 }
-                                                (AST.NumberLiteral (Number.Integer 1))
+                                                (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                             , SourcePosition.at
                                                 { row = 1, col = 10 }
                                                 { row = 1, col = 11 }
-                                                (AST.NumberLiteral (Number.Integer 2))
+                                                (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
                                             ]
                                         }
                                     )
@@ -385,7 +386,7 @@ tests =
                                                   SourcePosition.at
                                                       { row = 3, col = 5 }
                                                       { row = 3, col = 6 }
-                                                      (AST.PInt { isHex = False, value = 1 })
+                                                      (AST.PInt { isHex = False, text = "1", suffix = Nothing })
                                               , body =
                                                   SourcePosition.at
                                                       { row = 3, col = 10 }
@@ -409,7 +410,7 @@ tests =
                             }
                         )
             , test "backward pipe operator with record" <| \_ ->
-                Parser.run PE.parser Context.empty
+                Run.run PE.parser Context.empty
                     "{ onInit = initWithCommand <| Compiler.Backend.Make { optimize = flags.optimize } }"
                     |> expectExpression
                         (AST.Record
@@ -478,7 +479,7 @@ tests =
                             ]
                         )
             , test "complex function call with record argument" <| \_ ->
-                Parser.run PE.parser Context.empty
+                Run.run PE.parser Context.empty
                     """
                     { onInit = initWithCommand <|
                         Compiler.Backend.Make
@@ -553,7 +554,7 @@ tests =
                             ]
                         )
             , test "operators" <| \_ ->
-                Parser.run PE.parser Context.empty "func a + b - c"
+                Run.run PE.parser Context.empty "func a + b - c"
                     |> expectExpression
                         (AST.Binops
                             { left =
@@ -604,7 +605,7 @@ tests =
                             }
                         )
             , test "operators (with negated var)" <| \_ ->
-                Parser.run PE.parser Context.empty "func a + -b - c"
+                Run.run PE.parser Context.empty "func a + -b - c"
                     |> expectExpression
                         (AST.Binops
                             { left =
@@ -660,7 +661,7 @@ tests =
                             }
                         )
             , test "operators with negated left var" <| \_ ->
-                Parser.run PE.parser Context.empty
+                Run.run PE.parser Context.empty
                     """
                     (-a + b)
                     """
@@ -695,7 +696,7 @@ tests =
                                 )
                         )
             , test "operators over multiple lines without indent" <| \_ ->
-                Parser.run PE.parser Context.empty
+                Run.run PE.parser Context.empty
                     """
                     func a
                     + b
@@ -733,7 +734,7 @@ tests =
                             }
                         )
             , test "pipe operator over multiple lines with indent" <| \_ ->
-                Parser.run PE.parser Context.empty
+                Run.run PE.parser Context.empty
                     """
                     a + b
                     |> func
@@ -775,7 +776,7 @@ tests =
                             }
                         )
             , test "array literal with pipe operator over multiple lines" <| \_ ->
-                Parser.run PE.parser Context.empty
+                Run.run PE.parser Context.empty
                     """
                     [ 1, 2, 3 ]
                     |> func
@@ -789,15 +790,15 @@ tests =
                                     (AST.ArrayLiteral
                                         [ { start = { row = 1, col = 3 }
                                           , end = { row = 1, col = 4 }
-                                          , value = AST.NumberLiteral (Number.Integer 1)
+                                          , value = AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing })
                                           }
                                         , { start = { row = 1, col = 6 }
                                           , end = { row = 1, col = 7 }
-                                          , value = AST.NumberLiteral (Number.Integer 2)
+                                          , value = AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing })
                                           }
                                         , { start = { row = 1, col = 9 }
                                           , end = { row = 1, col = 10 }
-                                          , value = AST.NumberLiteral (Number.Integer 3)
+                                          , value = AST.NumberLiteral (Number.Integer { text = "3", suffix = Nothing })
                                           }
                                         ]
                                     )
@@ -814,7 +815,7 @@ tests =
                             }
                         )
             , test "pipe operator with function having multiple arguments" <| \_ ->
-                Parser.run PE.parser Context.empty
+                Run.run PE.parser Context.empty
                     """
                     foo a b
                     |> bar x y
@@ -875,23 +876,23 @@ tests =
             ]
         , describe "Array"
             [ test "Empty array" <| \_ ->
-                Parser.run PE.parser Context.empty "[]"
+                Run.run PE.parser Context.empty "[]"
                     |> expectExpression (AST.ArrayLiteral [])
             , test "Empty array (with whitespace)" <| \_ ->
-                Parser.run PE.parser Context.empty "[ \n ]"
+                Run.run PE.parser Context.empty "[ \n ]"
                     |> expectExpression (AST.ArrayLiteral [])
             , test "Singleton" <| \_ ->
-                Parser.run PE.parser Context.empty "[ 1 ]"
+                Run.run PE.parser Context.empty "[ 1 ]"
                     |> expectExpression
                         (AST.ArrayLiteral
                             [ { start = { row = 1, col = 3 }
                               , end = { row = 1, col = 4 }
-                              , value = AST.NumberLiteral (Number.Integer 1)
+                              , value = AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing })
                               }
                             ]
                         )
             , test "Multiples" <| \_ ->
-                Parser.run PE.parser Context.empty "[ \"one\", \"two\", \n \"three\" ]"
+                Run.run PE.parser Context.empty "[ \"one\", \"two\", \n \"three\" ]"
                     |> expectExpression
                         (AST.ArrayLiteral
                             [ { start = { row = 1, col = 3 }
@@ -909,12 +910,12 @@ tests =
                             ]
                         )
             , test "Array with if-expression" <| \_ ->
-                Parser.run PE.parser Context.empty "[ 0, if True then 1 else 2 ]"
+                Run.run PE.parser Context.empty "[ 0, if True then 1 else 2 ]"
                     |> expectExpression
                         (AST.ArrayLiteral
                             [ { start = { row = 1, col = 3 }
                               , end = { row = 1, col = 4 }
-                              , value = AST.NumberLiteral (Number.Integer 0)
+                              , value = AST.NumberLiteral (Number.Integer { text = "0", suffix = Nothing })
                               }
                             , { start = { row = 1, col = 6 }
                               , end = { row = 1, col = 27 }
@@ -930,21 +931,21 @@ tests =
                                                 SourcePosition.at
                                                     { row = 1, col = 19 }
                                                     { row = 1, col = 20 }
-                                                    (AST.NumberLiteral (Number.Integer 1))
+                                                    (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                               }
                                             ]
                                         , elseBranch =
                                             SourcePosition.at
                                                 { row = 1, col = 26 }
                                                 { row = 1, col = 27 }
-                                                (AST.NumberLiteral (Number.Integer 2))
+                                                (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
                                         }
                                     )
                               }
                             ]
                         )
             , test "Array with operator expression" <| \_ ->
-                Parser.run PE.parser Context.empty "[ 1 + 2, 3 |> inc ]"
+                Run.run PE.parser Context.empty "[ 1 + 2, 3 |> inc ]"
                     |> expectExpression
                         (AST.ArrayLiteral
                             [ { start = { row = 1, col = 3 }
@@ -955,7 +956,7 @@ tests =
                                             SourcePosition.at
                                                 { row = 1, col = 3 }
                                                 { row = 1, col = 4 }
-                                                (AST.NumberLiteral (Number.Integer 1))
+                                                (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                         , operator =
                                             SourcePosition.at
                                                 { row = 1, col = 5 }
@@ -965,7 +966,7 @@ tests =
                                             SourcePosition.at
                                                 { row = 1, col = 7 }
                                                 { row = 1, col = 8 }
-                                                (AST.NumberLiteral (Number.Integer 2))
+                                                (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
                                         }
                                     )
                               }
@@ -977,7 +978,7 @@ tests =
                                             SourcePosition.at
                                                 { row = 1, col = 10 }
                                                 { row = 1, col = 11 }
-                                                (AST.NumberLiteral (Number.Integer 3))
+                                                (AST.NumberLiteral (Number.Integer { text = "3", suffix = Nothing }))
                                         , operator =
                                             SourcePosition.at
                                                 { row = 1, col = 12 }
@@ -996,13 +997,13 @@ tests =
             ]
         , describe "Record"
             [ test "Empty record" <| \_ ->
-                Parser.run PE.parser Context.empty "{}"
+                Run.run PE.parser Context.empty "{}"
                     |> expectExpression (AST.Record [])
             , test "Empty array (with whitespace)" <| \_ ->
-                Parser.run PE.parser Context.empty "{ \n }"
+                Run.run PE.parser Context.empty "{ \n }"
                     |> expectExpression (AST.Record [])
             , test "Singleton" <| \_ ->
-                Parser.run PE.parser Context.empty "{ field1 = 1 }"
+                Run.run PE.parser Context.empty "{ field1 = 1 }"
                     |> expectExpression
                         (AST.Record
                             [ { field =
@@ -1014,12 +1015,12 @@ tests =
                                     SourcePosition.at
                                         { row = 1, col = 12 }
                                         { row = 1, col = 13 }
-                                        (AST.NumberLiteral (Number.Integer 1))
+                                        (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                               }
                             ]
                         )
             , test "Multiples" <| \_ ->
-                Parser.run PE.parser Context.empty "{ field1 = 1, field2 = 10 }"
+                Run.run PE.parser Context.empty "{ field1 = 1, field2 = 10 }"
                     |> expectExpression
                         (AST.Record
                             [ { field =
@@ -1031,7 +1032,7 @@ tests =
                                     SourcePosition.at
                                         { row = 1, col = 12 }
                                         { row = 1, col = 13 }
-                                        (AST.NumberLiteral (Number.Integer 1))
+                                        (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                               }
                             , { field =
                                     SourcePosition.at
@@ -1042,12 +1043,12 @@ tests =
                                     SourcePosition.at
                                         { row = 1, col = 24 }
                                         { row = 1, col = 26 }
-                                        (AST.NumberLiteral (Number.Integer 10))
+                                        (AST.NumberLiteral (Number.Integer { text = "10", suffix = Nothing }))
                               }
                             ]
                         )
                 , test "Record with if-expression" <| \_ ->
-                    Parser.run PE.parser Context.empty "{ field1 = if True then 1 else 2 }"
+                    Run.run PE.parser Context.empty "{ field1 = if True then 1 else 2 }"
                         |> expectExpression
                             (AST.Record
                                 [ { field =
@@ -1070,21 +1071,21 @@ tests =
                                                         SourcePosition.at
                                                             { row = 1, col = 25 }
                                                             { row = 1, col = 26 }
-                                                            (AST.NumberLiteral (Number.Integer 1))
+                                                            (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                                       }
                                                     ]
                                                 , elseBranch =
                                                     SourcePosition.at
                                                         { row = 1, col = 32 }
                                                         { row = 1, col = 33 }
-                                                        (AST.NumberLiteral (Number.Integer 2))
+                                                        (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
                                                 }
                                             )
                                   }
                                 ]
                             )
                 , test "Record with operator expression" <| \_ ->
-                    Parser.run PE.parser Context.empty "{ field1 = 1 + 2, field2 = 3 |> inc }"
+                    Run.run PE.parser Context.empty "{ field1 = 1 + 2, field2 = 3 |> inc }"
                         |> expectExpression
                             (AST.Record
                                 [ { field =
@@ -1101,7 +1102,7 @@ tests =
                                                     SourcePosition.at
                                                         { row = 1, col = 12 }
                                                         { row = 1, col = 13 }
-                                                        (AST.NumberLiteral (Number.Integer 1))
+                                                        (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                                 , operator =
                                                     SourcePosition.at
                                                         { row = 1, col = 14 }
@@ -1111,7 +1112,7 @@ tests =
                                                     SourcePosition.at
                                                         { row = 1, col = 16 }
                                                         { row = 1, col = 17 }
-                                                        (AST.NumberLiteral (Number.Integer 2))
+                                                        (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
                                                 }
                                             )
                                   }
@@ -1129,7 +1130,7 @@ tests =
                                                     SourcePosition.at
                                                         { row = 1, col = 28 }
                                                         { row = 1, col = 29 }
-                                                        (AST.NumberLiteral (Number.Integer 3))
+                                                        (AST.NumberLiteral (Number.Integer { text = "3", suffix = Nothing }))
                                                 , operator =
                                                     SourcePosition.at
                                                         { row = 1, col = 30 }
@@ -1146,7 +1147,7 @@ tests =
                                 ]
                             )
             , test "Update" <| \_ ->
-                Parser.run PE.parser Context.empty "{ old | field1 = 1, field2 = 10 }"
+                Run.run PE.parser Context.empty "{ old | field1 = 1, field2 = 10 }"
                     |> expectExpression
                         (AST.Update
                             { record =
@@ -1164,7 +1165,7 @@ tests =
                                         SourcePosition.at
                                             { row = 1, col = 18 }
                                             { row = 1, col = 19 }
-                                            (AST.NumberLiteral (Number.Integer 1))
+                                            (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                   }
                                 , { field =
                                         SourcePosition.at
@@ -1175,7 +1176,7 @@ tests =
                                         SourcePosition.at
                                             { row = 1, col = 30 }
                                             { row = 1, col = 32 }
-                                            (AST.NumberLiteral (Number.Integer 10))
+                                            (AST.NumberLiteral (Number.Integer { text = "10", suffix = Nothing }))
                                   }
                                 ]
                             }
@@ -1183,7 +1184,7 @@ tests =
                 ]
             , describe "if-expressions"
                 [ test "simple test" <| \_ ->
-                    Parser.run PE.parser Context.empty "if True then 1 else 2"
+                    Run.run PE.parser Context.empty "if True then 1 else 2"
                         |> expectExpression
                             (AST.If
                                 { branches =
@@ -1196,20 +1197,20 @@ tests =
                                         SourcePosition.at
                                             { row = 1, col = 14 }
                                             { row = 1, col = 15 }
-                                            (AST.NumberLiteral (Number.Integer 1))
+                                            (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                       }
                                     ]
                                 , elseBranch =
                                     SourcePosition.at
                                         { row = 1, col = 21 }
                                         { row = 1, col = 22 }
-                                        (AST.NumberLiteral (Number.Integer 2))
+                                        (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
                                 }
                             )
                 ]
             , describe "lambdas"
                 [ test "simple test" <| \_ ->
-                    Parser.run PE.parser Context.empty "\\a b -> a"
+                    Run.run PE.parser Context.empty "\\a b -> a"
                         |> expectExpression
                             (AST.Lambda
                                 { patterns =
@@ -1232,7 +1233,7 @@ tests =
                 ]
             , describe "when-is"
                 [ test "simple test" <| \_ ->
-                    Parser.run PE.parser Context.empty "when myVar is A -> 'a'"
+                    Run.run PE.parser Context.empty "when myVar is A -> 'a'"
                         |> expectExpression
                             (AST.When
                                 { expression =
@@ -1264,7 +1265,7 @@ tests =
                                 }
                             )
                 , test "multiple branches" <| \_ ->
-                    Parser.run PE.parser Context.empty
+                    Run.run PE.parser Context.empty
                         """
                         when myVar is
                             A -> 'a'
@@ -1320,7 +1321,7 @@ tests =
                                 }
                             )
                 , test "with destructuring" <| \_ ->
-                    Parser.run PE.parser Context.empty "when myVar is { x = y } -> x"
+                    Run.run PE.parser Context.empty "when myVar is { x = y } -> x"
                         |> expectExpression
                             (AST.When
                                 { expression =
@@ -1359,7 +1360,7 @@ tests =
                                 }
                             )
                 , test "with qualified type patterns" <| \_ ->
-                    Parser.run PE.parser Context.empty "when x is MyType { first } -> first"
+                    Run.run PE.parser Context.empty "when x is MyType { first } -> first"
                         |> expectExpression
                             (AST.When
                                 { expression =
@@ -1406,7 +1407,7 @@ tests =
                                 }
                             )
                 , test "complex with multiple branches and function calls" <| \_ ->
-                    Parser.run PE.parser Context.empty
+                    Run.run PE.parser Context.empty
                         """
                         when result is
                             Ok { value } ->
@@ -1571,7 +1572,7 @@ tests =
                                 }
                             )
                 , test "nested when-is expressions" <| \_ ->
-                    Parser.run PE.parser Context.empty
+                    Run.run PE.parser Context.empty
                         """
                         when outer is
                             A inner ->
@@ -1635,7 +1636,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 4, col = 18 }
                                                                 { row = 4, col = 19 }
-                                                                (AST.NumberLiteral (Number.Integer 1))
+                                                                (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                                         }
                                                       , { pattern =
                                                             SourcePosition.at
@@ -1654,7 +1655,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 5, col = 18 }
                                                                 { row = 5, col = 19 }
-                                                                (AST.NumberLiteral (Number.Integer 2))
+                                                                (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
                                                         }
                                                       ]
                                                   }
@@ -1677,7 +1678,7 @@ tests =
                                           SourcePosition.at
                                               { row = 6, col = 10 }
                                               { row = 6, col = 11 }
-                                              (AST.NumberLiteral (Number.Integer 3))
+                                              (AST.NumberLiteral (Number.Integer { text = "3", suffix = Nothing }))
                                       }
                                     ]
                                 }
@@ -1685,7 +1686,7 @@ tests =
                 ]
             , describe "let-in"
                 [ test "Simple case" <| \_ ->
-                    Parser.run PE.parser Context.empty
+                    Run.run PE.parser Context.empty
                         """
                         let
                             num =
@@ -1711,7 +1712,7 @@ tests =
                                                 SourcePosition.at
                                                     { row = 3, col = 9 }
                                                     { row = 3, col = 10 }
-                                                    (AST.NumberLiteral (Number.Integer 1))
+                                                    (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                             }
                                         )
                                     ]
@@ -1723,7 +1724,7 @@ tests =
                                 }
                             )
                 , test "With function" <| \_ ->
-                    Parser.run PE.parser Context.empty
+                    Run.run PE.parser Context.empty
                         """
                         let
                             unused =
@@ -1752,7 +1753,7 @@ tests =
                                                 SourcePosition.at
                                                     { row = 3, col = 9 }
                                                     { row = 3, col = 10 }
-                                                    (AST.NumberLiteral (Number.Integer 5))
+                                                    (AST.NumberLiteral (Number.Integer { text = "5", suffix = Nothing }))
                                             }
                                         )
                                     , SourcePosition.at
@@ -1787,7 +1788,7 @@ tests =
                                 }
                             )
                 , test "With signature" <| \_ ->
-                    Parser.run PE.parser Context.empty
+                    Run.run PE.parser Context.empty
                         """
                         let
                             number : Int
@@ -1830,7 +1831,7 @@ tests =
                                                 SourcePosition.at
                                                     { row = 4, col = 9 }
                                                     { row = 4, col = 10 }
-                                                    (AST.NumberLiteral (Number.Integer 1))
+                                                    (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
                                             }
                                         )
                                     ]
@@ -1842,7 +1843,7 @@ tests =
                                 }
                             )
                 , test "Destructuring" <| \_ ->
-                    Parser.run PE.parser Context.empty
+                    Run.run PE.parser Context.empty
                         """
                         let
                             { a } =
@@ -1885,7 +1886,7 @@ tests =
                                                               SourcePosition.at
                                                                   { row = 3, col = 15 }
                                                                   { row = 3, col = 16 }
-                                                                  (AST.NumberLiteral (Number.Integer 5))
+                                                                  (AST.NumberLiteral (Number.Integer { text = "5", suffix = Nothing }))
                                                           }
                                                         ]
                                                     )
@@ -1906,13 +1907,13 @@ tests =
                 -- non-identifier character after it. Parsed with `keyword`, an
                 -- arrow written tight against its body was rejected — while
                 -- the reference compiler accepts it.
-                Parser.run PE.parser Context.empty "when x is\n    _ ->y"
+                Run.run PE.parser Context.empty "when x is\n    _ ->y"
                     |> expectOk
             , test "a lambda argument whose name merely starts with `as`" <| \_ ->
-                Parser.run PE.parser Context.empty "\\x as_ -> as_"
+                Run.run PE.parser Context.empty "\\x as_ -> as_"
                     |> expectOk
             , test "a when branch pattern aliased without parens" <| \_ ->
-                Parser.run PE.parser Context.empty "when x is\n    Just y as whole ->\n        whole"
+                Run.run PE.parser Context.empty "when x is\n    Just y as whole ->\n        whole"
                     |> expectOk
             ]
         , describe "postfix field access"
@@ -1922,35 +1923,35 @@ tests =
             -- takes the accessor-function branch for the tight spelling has
             -- lost the distinction at parse time.
             [ test "after a parenthesized call" <| \_ ->
-                Parser.run PE.parser Context.empty "(f x).field"
+                Run.run PE.parser Context.empty "(f x).field"
                     |> expectAccessOf "field"
             , test "after a record literal" <| \_ ->
-                Parser.run PE.parser Context.empty "{ x = 1 }.x"
+                Run.run PE.parser Context.empty "{ x = 1 }.x"
                     |> expectAccessOf "x"
             , test "after a record update" <| \_ ->
-                Parser.run PE.parser Context.empty "{ r | x = 1 }.x"
+                Run.run PE.parser Context.empty "{ r | x = 1 }.x"
                     |> expectAccessOf "x"
             , test "after a qualified variable" <| \_ ->
-                Parser.run PE.parser Context.empty "Config.default.timeout"
+                Run.run PE.parser Context.empty "Config.default.timeout"
                     |> expectAccessOf "timeout"
             , test "after a plain variable" <| \_ ->
-                Parser.run PE.parser Context.empty "record.field"
+                Run.run PE.parser Context.empty "record.field"
                     |> expectAccessOf "field"
             , test "chained after a record update" <| \_ ->
-                Parser.run PE.parser Context.empty "{ r | x = 1 }.x.y"
+                Run.run PE.parser Context.empty "{ r | x = 1 }.x.y"
                     |> expectAccessOf "y"
             , test "with a space it stays an application of the accessor" <| \_ ->
-                Parser.run PE.parser Context.empty "{ x = 1 } .x"
+                Run.run PE.parser Context.empty "{ x = 1 } .x"
                     |> expectCallWithAccessorArg
             ]
         ]
 
 
-expectAccessOf : String -> Result (Array (Parser.DeadEnd c e)) AST.Expression -> Expectation
+expectAccessOf : Inspect e => String -> Result (Array (Run.DeadEnd e)) AST.Expression -> Expectation
 expectAccessOf field result =
     when result is
         Err err ->
-            Expect.fail (Debug.toString err)
+            Expect.fail (inspect err)
 
         Ok { value } ->
             when value is
@@ -1958,14 +1959,14 @@ expectAccessOf field result =
                     Expect.equal field accessor
 
                 other ->
-                    Expect.fail ("Expected a field access, got " ++ Debug.toString other)
+                    Expect.fail ("Expected a field access, got " ++ inspect other)
 
 
-expectCallWithAccessorArg : Result (Array (Parser.DeadEnd c e)) AST.Expression -> Expectation
+expectCallWithAccessorArg : Inspect e => Result (Array (Run.DeadEnd e)) AST.Expression -> Expectation
 expectCallWithAccessorArg result =
     when result is
         Err err ->
-            Expect.fail (Debug.toString err)
+            Expect.fail (inspect err)
 
         Ok { value } ->
             when value is
@@ -1975,43 +1976,43 @@ expectCallWithAccessorArg result =
                             Expect.pass
 
                         other ->
-                            Expect.fail ("Expected one accessor argument, got " ++ Debug.toString other)
+                            Expect.fail ("Expected one accessor argument, got " ++ inspect other)
 
                 other ->
-                    Expect.fail ("Expected a call, got " ++ Debug.toString other)
+                    Expect.fail ("Expected a call, got " ++ inspect other)
 
 
-expectOk : Result (Array (Parser.DeadEnd c e)) a -> Expectation
+expectOk : Inspect e => Result (Array (Run.DeadEnd e)) a -> Expectation
 expectOk result =
     when result is
         Err err ->
-            Expect.fail (Debug.toString err)
+            Expect.fail (inspect err)
 
         Ok _ ->
             Expect.pass
 
 
-expectExpression : a -> Result (Array (Parser.DeadEnd c e)) (SourcePosition.Located a) -> Expectation
+expectExpression : (Eq a, Inspect a, Inspect e) => a -> Result (Array (Run.DeadEnd e)) (SourcePosition.Located a) -> Expectation
 expectExpression expected result =
     when result is
         Err err ->
-            Expect.fail (Debug.toString err)
+            Expect.fail (inspect err)
 
         Ok { value } ->
             Expect.equal expected value
 
 
-expectLocatedExpression : (SourcePosition.Located a) -> Result (Array (Parser.DeadEnd c e)) (SourcePosition.Located a) -> Expectation
+expectLocatedExpression : (Eq a, Inspect a, Inspect e) => SourcePosition.Located a -> Result (Array (Run.DeadEnd e)) (SourcePosition.Located a) -> Expectation
 expectLocatedExpression expected result =
     when result is
         Err err ->
-            Expect.fail (Debug.toString err)
+            Expect.fail (inspect err)
 
         Ok value ->
             Expect.equal expected value
 
 
-expectErr : PE.Error -> Result (Array (Parser.DeadEnd c PE.Error)) a -> Expectation
+expectErr : PE.Error -> Result (Array (Run.DeadEnd PE.Error)) a -> Expectation
 expectErr expected result =
     when result is
         Ok _ ->

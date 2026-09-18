@@ -2,6 +2,7 @@ module Compiler.Parse.Space exposing
     ( Error (..)
     , parser
     , scopeIndentToLineStart
+    , scopeIndentToColumn
     , checkIndent
     , errorToString
     )
@@ -13,7 +14,7 @@ module Compiler.Parse.Space exposing
 
 ## Indentation helpers
 
-@docs scopeIndentToLineStart, checkIndent
+@docs scopeIndentToLineStart, scopeIndentToColumn, checkIndent
 -}
 
 
@@ -155,7 +156,25 @@ scopeIndentToLineStart p =
         .indent
         (\newIndent payload -> { payload | indent = newIndent })
         p
-    
+
+
+{-| This will set `Context.indent` to the current column for the duration of the
+provided parser, so that what it reads past its first line must be to the right
+of where it began. It is the Haskell parser's `withIndent`: a `when` reads its
+branches under it, from the column of the first (D86).
+-}
+scopeIndentToColumn : Parser Context e v -> Parser Context e v
+scopeIndentToColumn p =
+    Parser.getCol
+        |> Parser.andThen
+            (\col ->
+                Parser.scopedUpdatePayload
+                    (\_ -> col)
+                    .indent
+                    (\newIndent payload -> { payload | indent = newIndent })
+                    p
+            )
+
 
 {-| Use this to check that the current indentation is valid. That is, the current
 column has to be greater than `Context.indent`.

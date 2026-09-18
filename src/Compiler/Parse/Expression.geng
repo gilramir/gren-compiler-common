@@ -141,19 +141,13 @@ parser =
                                         Nothing ->
                                             finalExpression
                                 )
-
-                    indentationBumped =
-                        Space.scopeIndentToLineStart completionParser
                 in
-                when firstTerm.value is
-                    AST.Var _ ->
-                        indentationBumped
-
-                    AST.VarQual _ ->
-                        indentationBumped
-
-                    _ ->
-                        completionParser
+                -- An argument is to the right of the enclosing indentation, as
+                -- the Haskell parser's `checkIndent` has it (D86). A call whose
+                -- function is a name used to be scoped to the line it began on,
+                -- and so refused an argument on the next line at the name's own
+                -- column, which `geng make` compiles.
+                completionParser
             )
 
 
@@ -495,7 +489,7 @@ ifElseLoop startPos branches =
 
 whenParser : Parser Context Error AST.Expression
 whenParser =
-    Parser.succeed (\start expr firstBranch -> { start = start, expr = expr, firstBranch = firstBranch })
+    Parser.succeed (\start expr -> { start = start, expr = expr })
         |> Parser.keep Parser.getPosition
         |> Parser.skip (Variable.keyword "when" (ExpectedKeyword "when"))
         |> Parser.skip spaceParser
@@ -503,10 +497,24 @@ whenParser =
         |> Parser.skip spaceParser
         |> Parser.skip (Variable.keyword "is" (ExpectedKeyword "is"))
         |> Parser.skip spaceParser
-        |> Parser.keep whenBranchParser
+        |> Parser.skip checkIndent
         |> Parser.andThen
-            (\{ start, expr, firstBranch } ->
-                Parser.loop [ firstBranch ] whenBranchLoopParser
+            (\{ start, expr } ->
+                -- The first branch's column is the `when`'s indentation: what a
+                -- branch reads past its first line is to the right of it, and
+                -- every other branch begins at it. That is the Haskell parser's
+                -- `withIndent` and `checkAligned` (D86). This parser used to
+                -- scope the whole `when` to the line it began on, and so refused
+                -- branches written at the column of a `when` that begins a line
+                -- (`SemanticVersionRange.fromString`), which `geng make` compiles.
+                Parser.getCol
+                    |> Parser.andThen
+                        (\column ->
+                            Parser.succeed (\firstBranch -> firstBranch)
+                                |> Parser.keep whenBranchParser
+                                |> Parser.andThen (\firstBranch -> Parser.loop [ firstBranch ] (whenBranchLoopParser column))
+                                |> Space.scopeIndentToColumn
+                        )
                     |> Parser.map
                         (\branches ->
                             let
@@ -522,7 +530,7 @@ whenParser =
                                 (AST.When { expression = expr, branches = branches })
                         )
             )
-        |> Space.scopeIndentToLineStart
+
 
 whenBranchParser : Parser Context Error AST.WhenBranch
 whenBranchParser =
@@ -535,17 +543,31 @@ whenBranchParser =
         |> Parser.skip (Parser.token "->" (ExpectedKeyword "->"))
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.lazy (\_ -> parser))
-        |> Space.scopeIndentToLineStart
 
 
-whenBranchLoopParser : Array AST.WhenBranch -> Parser Context Error (Parser.Step (Array AST.WhenBranch) (Array AST.WhenBranch))
-whenBranchLoopParser branches =
+whenBranchLoopParser : Int -> Array AST.WhenBranch -> Parser Context Error (Parser.Step (Array AST.WhenBranch) (Array AST.WhenBranch))
+whenBranchLoopParser column branches =
     Parser.oneOf
         [ Parser.succeed (\branch -> Parser.Loop (Array.pushLast branch branches))
-            |> Parser.skip checkIndent
+            |> Parser.skip (aligned column)
             |> Parser.keep whenBranchParser
         , Parser.succeed (Parser.Done branches)
         ]
+
+
+{-| Succeeds only at the given column: the Haskell parser's `checkAligned`.
+-}
+aligned : Int -> Parser Context Error {}
+aligned column =
+    Parser.getCol
+        |> Parser.andThen
+            (\col ->
+                if col == column then
+                    Parser.succeed {}
+
+                else
+                    Parser.problem IndentError
+            )
 
 
 -- FUNCTION

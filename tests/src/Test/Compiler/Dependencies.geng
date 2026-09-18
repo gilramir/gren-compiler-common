@@ -1,0 +1,261 @@
+module Test.Compiler.Dependencies exposing (tests)
+
+import Expect exposing (Expectation)
+import Test exposing (Test, describe, test)
+import Compiler.Dependencies as Deps
+import Dict exposing (Dict)
+import SemanticVersion exposing (SemanticVersion)
+import SemanticVersionRange exposing (SemanticVersionRange)
+
+
+{-| Minimal version selection in its three steps (Geng's packaging.md K9).
+Upstream's `solve` and its tests went with the solver it replaced.
+-}
+tests : Test
+tests =
+    describe "Compiler.Dependencies"
+        [ describe "wanted"
+            [ test "nothing for a project without dependencies" <| \{} ->
+                Deps.wanted (graph [] [] [])
+                    |> Expect.equal []
+            , test "a range asks for its lower bound" <| \{} ->
+                Deps.wanted (graph [ req "a" "1.2.0" ] [] [])
+                    |> shown
+                    |> Expect.equal [ "a@1.2.0" ]
+            , test "a pinned package is asked for at its pin" <| \{} ->
+                Deps.wanted (graph [ req "a" "1.2.0" ] [ pin "a" "3.1.0" ] [])
+                    |> shown
+                    |> Expect.equal [ "a@3.1.0" ]
+            , test "a loaded version's requirements are asked for" <| \{} ->
+                Deps.wanted (graph [ req "a" "1.0.0" ] [] [ node "a" "1.0.0" [ req "b" "2.0.0" ] ])
+                    |> shown
+                    |> Expect.equal [ "b@2.0.0" ]
+            , test "nothing loaded is asked for again" <| \{} ->
+                Deps.wanted (graph [ req "a" "1.0.0" ] [] [ node "a" "1.0.0" [] ])
+                    |> Expect.equal []
+            , test "without repeats, in order of name and then version" <| \{} ->
+                Deps.wanted
+                    (graph
+                        [ req "c" "1.0.0", req "b" "2.0.0" ]
+                        []
+                        [ node "c" "1.0.0" [ req "b" "1.10.0", req "a" "1.0.0" ]
+                        , node "x" "1.0.0" [ req "b" "1.10.0", req "b2" "0.1.0" ]
+                        ]
+                    )
+                    |> shown
+                    |> Expect.equal [ "a@1.0.0", "b@1.10.0", "b@2.0.0", "b2@0.1.0" ]
+            , test "a version that will be passed over still asks" <| \{} ->
+                Deps.wanted
+                    (graph
+                        [ req "a" "1.0.0", req "b" "1.0.0" ]
+                        []
+                        [ node "a" "1.0.0" [ req "old" "1.0.0" ]
+                        , node "b" "1.0.0" [ req "a" "1.3.0" ]
+                        , node "a" "1.3.0" []
+                        ]
+                    )
+                    |> shown
+                    |> Expect.equal [ "old@1.0.0" ]
+            ]
+        , describe "select"
+            [ test "nothing for a project without dependencies" <| \{} ->
+                Deps.select (graph [] [] [])
+                    |> Expect.equal Dict.empty
+            , test "the highest version anything asks for" <| \{} ->
+                Deps.select passedOver
+                    |> selected
+                    |> Expect.equal [ "a@1.3.0", "b@1.0.0" ]
+            , test "leaves out what only a passed-over version required" <| \{} ->
+                Deps.select passedOver
+                    |> Dict.member "old"
+                    |> Expect.equal False
+            , test "the pin, not the highest loaded" <| \{} ->
+                Deps.select
+                    (graph
+                        [ req "a" "1.0.0", req "b" "1.0.0" ]
+                        [ pin "a" "1.1.0" ]
+                        [ node "a" "1.1.0" []
+                        , node "b" "1.0.0" [ req "a" "1.5.0" ]
+                        , node "a" "1.5.0" []
+                        ]
+                    )
+                    |> selected
+                    |> Expect.equal [ "a@1.1.0", "b@1.0.0" ]
+            , test "a transitive requirement is reached through the chosen version" <| \{} ->
+                Deps.select
+                    (graph
+                        [ req "a" "1.0.0" ]
+                        []
+                        [ node "a" "1.0.0" [ req "b" "2.0.0" ]
+                        , node "b" "2.0.0" [ req "c" "0.3.0" ]
+                        , node "c" "0.3.0" []
+                        ]
+                    )
+                    |> selected
+                    |> Expect.equal [ "a@1.0.0", "b@2.0.0", "c@0.3.0" ]
+            , test "a cycle ends" <| \{} ->
+                Deps.select
+                    (graph
+                        [ req "a" "1.0.0" ]
+                        []
+                        [ node "a" "1.0.0" [ req "b" "1.0.0" ]
+                        , node "b" "1.0.0" [ req "a" "1.0.0" ]
+                        ]
+                    )
+                    |> selected
+                    |> Expect.equal [ "a@1.0.0", "b@1.0.0" ]
+            ]
+        , describe "check"
+            [ test "a selection inside every range has no conflicts" <| \{} ->
+                Deps.check passedOver (Deps.select passedOver)
+                    |> Expect.equal []
+            , test "an upper bound the choice passed, asked for by another package" <| \{} ->
+                let
+                    g =
+                        graph
+                            [ req "a" "1.0.0", req "b" "1.0.0" ]
+                            []
+                            [ node "a" "1.0.0" []
+                            , node "b" "1.0.0" [ req "a" "2.0.0" ]
+                            , node "a" "2.0.0" []
+                            ]
+                in
+                Deps.check g (Deps.select g)
+                    |> Array.map conflict
+                    |> Expect.equal [ "a 2.0.0 outside 1.0.0 <= v < 2.0.0 from root, chosen for b@1.0.0" ]
+            , test "a pin outside a range" <| \{} ->
+                let
+                    g =
+                        graph [ req "a" "1.0.0" ] [ pin "a" "2.0.0" ] [ node "a" "2.0.0" [] ]
+                in
+                Deps.check g (Deps.select g)
+                    |> Array.map conflict
+                    |> Expect.equal [ "a 2.0.0 outside 1.0.0 <= v < 2.0.0 from root, chosen for its pin" ]
+            , test "the root's own lower bound is the reason when it is one" <| \{} ->
+                let
+                    g =
+                        graph
+                            [ req "a" "2.0.0", req "b" "1.0.0" ]
+                            []
+                            [ node "a" "2.0.0" []
+                            , node "b" "1.0.0" [ req "a" "1.0.0" ]
+                            ]
+                in
+                Deps.check g (Deps.select g)
+                    |> Array.map conflict
+                    |> Expect.equal [ "a 2.0.0 outside 1.0.0 <= v < 2.0.0 from b@1.0.0, chosen for the root" ]
+            , test "in order of the package, and then of who asked" <| \{} ->
+                let
+                    g =
+                        graph
+                            [ req "z" "1.0.0", req "a" "1.0.0", req "y" "1.0.0" ]
+                            []
+                            [ node "z" "1.0.0" []
+                            , node "a" "1.0.0" []
+                            , node "y" "1.0.0" [ req "z" "2.0.0", req "a" "3.0.0" ]
+                            , node "z" "2.0.0" []
+                            , node "a" "3.0.0" []
+                            ]
+                in
+                Deps.check g (Deps.select g)
+                    |> Array.map conflict
+                    |> Expect.equal
+                        [ "a 3.0.0 outside 1.0.0 <= v < 2.0.0 from root, chosen for y@1.0.0"
+                        , "z 2.0.0 outside 1.0.0 <= v < 2.0.0 from root, chosen for y@1.0.0"
+                        ]
+            ]
+        ]
+
+
+{-| The root asks for `a` and `b`; `b` asks for a newer `a`, and the `a` it
+passes over is the only thing asking for `old`.
+-}
+passedOver : Deps.Graph
+passedOver =
+    graph
+        [ req "a" "1.0.0", req "b" "1.0.0" ]
+        []
+        [ node "a" "1.0.0" [ req "old" "1.0.0" ]
+        , node "b" "1.0.0" [ req "a" "1.3.0" ]
+        , node "a" "1.3.0" []
+        , node "old" "1.0.0" []
+        ]
+
+
+graph : Array { name : String, range : SemanticVersionRange } -> Array { name : String, version : SemanticVersion } -> Array Deps.Node -> Deps.Graph
+graph root pinned nodes =
+    { root = requirements root
+    , pinned = Array.foldl (\p -> Dict.set p.name p.version) Dict.empty pinned
+    , nodes = nodes
+    }
+
+
+node : String -> String -> Array { name : String, range : SemanticVersionRange } -> Deps.Node
+node name v deps =
+    { name = name, version = version v, dependencies = requirements deps }
+
+
+requirements : Array { name : String, range : SemanticVersionRange } -> Dict String SemanticVersionRange
+requirements =
+    Array.foldl (\r -> Dict.set r.name r.range) Dict.empty
+
+
+{-| A requirement for `name` from `v` up to the next major version.
+-}
+req : String -> String -> { name : String, range : SemanticVersionRange }
+req name v =
+    { name = name, range = SemanticVersionRange.compatibleWith (version v) }
+
+
+pin : String -> String -> { name : String, version : SemanticVersion }
+pin name v =
+    { name = name, version = version v }
+
+
+version : String -> SemanticVersion
+version str =
+    SemanticVersion.fromString str
+        |> Maybe.withDefault { major = 0, minor = 0, patch = 0 }
+
+
+shown : Array { name : String, version : SemanticVersion } -> Array String
+shown =
+    Array.map (\w -> w.name ++ "@" ++ SemanticVersion.toString w.version)
+
+
+selected : Dict String SemanticVersion -> Array String
+selected selection =
+    Dict.foldl (\name v acc -> Array.pushLast (name ++ "@" ++ SemanticVersion.toString v) acc) [] selection
+
+
+conflict : Deps.Conflict -> String
+conflict c =
+    let
+        from =
+            when c.requiredBy is
+                Nothing ->
+                    "root"
+
+                Just r ->
+                    r.name ++ "@" ++ SemanticVersion.toString r.version
+
+        because =
+            when c.chosenBecause is
+                Deps.Pinned ->
+                    "its pin"
+
+                Deps.AskedByRoot ->
+                    "the root"
+
+                Deps.AskedBy r ->
+                    r.name ++ "@" ++ SemanticVersion.toString r.version
+    in
+    c.name
+        ++ " "
+        ++ SemanticVersion.toString c.selected
+        ++ " outside "
+        ++ SemanticVersionRange.toString c.range
+        ++ " from "
+        ++ from
+        ++ ", chosen for "
+        ++ because

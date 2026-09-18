@@ -1,0 +1,24 @@
+module Test.Compiler.Parse.Run exposing (DeadEnd, run)
+
+{-| `Parser.run` without the payload at each dead end.
+
+The payload is the parser's `Context`, whose comments are an `Array.Builder`,
+which has no `Eq` or `Inspect` instance, so a result that carries one can be
+neither compared nor shown. What a test asks about a failure is where it was and
+what the problem is.
+-}
+
+import String.Parser.Advanced as Parser exposing (Parser)
+
+
+type alias DeadEnd problem =
+    { row : Int
+    , col : Int
+    , problem : problem
+    }
+
+
+run : Parser p x a -> p -> String -> Result (Array (DeadEnd x)) a
+run parser payload src =
+    Parser.run parser payload src
+        |> Result.mapError (Array.map (\d -> { row = d.row, col = d.col, problem = d.problem }))

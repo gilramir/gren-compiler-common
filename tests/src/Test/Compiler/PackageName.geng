@@ -1,0 +1,113 @@
+module Test.Compiler.PackageName exposing (tests)
+
+import Expect exposing (Expectation)
+import Test exposing (Test, describe, test)
+import Compiler.PackageName as Pkg
+
+
+{-| An identifier was an `author/name` pair until Geng's packaging.md K7 made it
+a URL path, so these are the rules `fromString` states for that shape.
+-}
+tests : Test
+tests =
+    describe "PackageName"
+        [ describe "fromString"
+            [ accepts "github.com/geng-language/node"
+            , accepts "gitlab.com/acme/tooling/argparse"
+            , accepts "git.corp.example/team/pkg.git/sub"
+            , accepts "core"
+            , accepts "a-b.example/X_y.z/Upper"
+            , test "toString gives back what was read" <| \{} ->
+                Pkg.fromString "gitlab.com/acme/tooling/argparse"
+                    |> Maybe.map Pkg.toString
+                    |> Expect.equal (Just "gitlab.com/acme/tooling/argparse")
+            , describe "Refused"
+                [ refuses "" "empty"
+                , refuses "github.com" "a host alone"
+                , refuses "gren-lang/core" "an author/name pair, whose first part has no dot"
+                , refuses "https://github.com/x/y" "a scheme"
+                , refuses "github.com/x/y/" "a trailing slash"
+                , refuses "github.com//y" "an empty element"
+                , refuses "GitHub.com/x/y" "an upper-case host"
+                , refuses ".github.com/x/y" "a host beginning with a dot"
+                , refuses "github.com./x/y" "a host ending with a dot"
+                , refuses "-github.com/x/y" "a host beginning with a hyphen"
+                , refuses "github.com-/x/y" "a host ending with a hyphen"
+                , refuses "github..com/x/y" "a host with two dots together"
+                , refuses "git_hub.com/x/y" "an underscore in a host"
+                , refuses "github.com/x/.." "a .. element"
+                , refuses "github.com/./y" "a . element"
+                , refuses "github.com/.x/y" "an element beginning with a dot"
+                , refuses "github.com/x./y" "an element ending with a dot"
+                , refuses "github.com/x y/z" "whitespace"
+                , refuses "github.com/x]/y" "a bracket"
+                , refuses "Core" "Core, which is not core"
+                ]
+            ]
+        , describe "isPrefix"
+            [ test "a host is a prefix" <| \{} ->
+                Expect.equal True (Pkg.isPrefix "git.corp.example")
+            , test "a host and a path is a prefix" <| \{} ->
+                Expect.equal True (Pkg.isPrefix "github.com/geng-language")
+            , test "core is not a prefix" <| \{} ->
+                Expect.equal False (Pkg.isPrefix "core")
+            , test "a trailing slash is the caller's to remove" <| \{} ->
+                Expect.equal False (Pkg.isPrefix "github.com/geng-language/")
+            ]
+        , describe "hasPrefix and dropPrefix"
+            [ test "an identifier has its own whole name" <| \{} ->
+                Expect.equal True (Pkg.hasPrefix "github.com/x/y" (name "github.com/x/y"))
+            , test "a whole element at a time" <| \{} ->
+                Expect.equal True (Pkg.hasPrefix "github.com/x" (name "github.com/x/y"))
+            , test "not the neighbour that shares its letters" <| \{} ->
+                Expect.equal False (Pkg.hasPrefix "github.com/x" (name "github.com/xy/z"))
+            , test "dropPrefix gives what is past the prefix" <| \{} ->
+                Expect.equal (Just "tooling/argparse") (Pkg.dropPrefix "gitlab.com/acme" (name "gitlab.com/acme/tooling/argparse"))
+            , test "dropPrefix of the whole identifier is empty" <| \{} ->
+                Expect.equal (Just "") (Pkg.dropPrefix "github.com/x/y" (name "github.com/x/y"))
+            , test "dropPrefix of a neighbour is Nothing" <| \{} ->
+                Expect.equal Nothing (Pkg.dropPrefix "github.com/x" (name "github.com/xy/z"))
+            ]
+        , describe "toFileName"
+            [ test "the documented example" <| \{} ->
+                Expect.equal "github_dcom-geng_hlanguage-node" (Pkg.toFileName Pkg.node)
+            , test "_ . and - each have an escape, and / is -" <| \{} ->
+                Expect.equal "a_ub_dc_hd-e" (Pkg.escapePath "a_b.c-d/e")
+            , test "two identifiers that differ only in their separators differ" <| \{} ->
+                Expect.notEqual
+                    (Pkg.toFileName (name "host.example/a-b/c"))
+                    (Pkg.toFileName (name "host.example/a/b-c"))
+            , test "an escaped name has no __ in it" <| \{} ->
+                Expect.equal False (String.contains "__" (Pkg.toFileName (name "a__b.example/c__d/_e_")))
+            ]
+        , describe "isCore"
+            [ test "core is core" <| \{} ->
+                Expect.equal True (Pkg.isCore Pkg.core)
+            , test "core read from a string is core" <| \{} ->
+                Expect.equal (Just True) (Maybe.map Pkg.isCore (Pkg.fromString "core"))
+            , test "node is not core" <| \{} ->
+                Expect.equal False (Pkg.isCore Pkg.node)
+            ]
+        ]
+
+
+name : String -> Pkg.PackageName
+name str =
+    Pkg.fromString str
+        |> Maybe.withDefault Pkg.example
+
+
+accepts : String -> Test
+accepts str =
+    test ("accepts " ++ str) <| \{} ->
+        Pkg.fromString str
+            |> Maybe.map Pkg.toString
+            |> Expect.equal (Just str)
+
+
+refuses : String -> String -> Test
+refuses str why =
+    test ("refuses " ++ why) <| \{} ->
+        Pkg.fromString str
+            |> Maybe.map Pkg.toString
+            |> Expect.equal Nothing

@@ -9,6 +9,7 @@ those legible next to each other. The Haskell frontend's `ConstraintSpec`,
 `ClassSpec` and `InstanceSpec` ask the same questions of the same sources.
 -}
 
+import Test.Compiler.Parse.Run as Run
 import Expect exposing (Expectation)
 import Test exposing (Test, describe, test)
 import String.Parser.Advanced as Parser
@@ -210,9 +211,9 @@ type Kind
 
 expectDecl : Kind -> String -> Expectation
 expectDecl expected source =
-    when Parser.run PD.parser Context.empty source is
+    when Run.run PD.parser Context.empty source is
         Err err ->
-            Expect.fail (Debug.toString err)
+            Expect.fail (inspect err)
 
         Ok decl ->
             Expect.equal expected (summarize decl.value)
@@ -220,12 +221,12 @@ expectDecl expected source =
 
 expectRefused : String -> Expectation
 expectRefused source =
-    when Parser.run PD.parser Context.empty source is
+    when Run.run PD.parser Context.empty source is
         Err _ ->
             Expect.pass
 
         Ok decl ->
-            Expect.fail ("Expected this to be refused, but it parsed as " ++ Debug.toString (summarize decl.value))
+            Expect.fail ("Expected this to be refused, but it parsed as " ++ inspect (summarize decl.value))
 
 
 summarize : PD.DeclarationValue -> Kind
@@ -265,9 +266,9 @@ summarize value =
 
 expectContext : Array { class : String, var : String } -> String -> Expectation
 expectContext expected source =
-    when Parser.run PT.annotation Context.empty source is
+    when Run.run PT.annotation Context.empty source is
         Err err ->
-            Expect.fail (Debug.toString err)
+            Expect.fail (inspect err)
 
         Ok ann ->
             Expect.equal expected (Array.map flatten ann.constraints)

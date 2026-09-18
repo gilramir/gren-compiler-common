@@ -1,5 +1,6 @@
 module Test.Compiler.Parse.Operator exposing ( tests )
 
+import Test.Compiler.Parse.Run as Run
 import Expect exposing (Expectation)
 import Test exposing (Test, describe, test)
 import String.Parser.Advanced as Parser
@@ -57,12 +58,12 @@ tests =
         ]
 
 
-run : String -> Result (Array (Parser.DeadEnd Context PO.Error)) String
+run : String -> Result (Array (Run.DeadEnd PO.Error)) String
 run str =
-    Parser.run PO.parser Context.empty str
+    Run.run PO.parser Context.empty str
 
 
-expectErr : PO.Error -> Result (Array (Parser.DeadEnd Context PO.Error)) String -> Expectation
+expectErr : PO.Error -> Result (Array (Run.DeadEnd PO.Error)) String -> Expectation
 expectErr expected result =
     when result is
         Ok _ ->

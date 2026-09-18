@@ -41,7 +41,7 @@ import Json.Encode as Encode
 {-| A range of `SemanticVersion` values between a lower value (inclusive) and an upper
 value (exclusive).
 -}
-@derive(Eq)
+@derive(Eq, Inspect)
 type SemanticVersionRange
     = SemanticVersionRange { lower : SemanticVersion, upper : SemanticVersion }
 

@@ -1,5 +1,6 @@
 module Test.Compiler.Parse.Space exposing ( tests )
 
+import Test.Compiler.Parse.Run as Run
 import Expect exposing (Expectation)
 import Test exposing (Test, describe, test)
 import String.Parser.Advanced as Parser exposing (Parser)
@@ -15,22 +16,22 @@ tests =
     describe "Parse.Space"
         [ describe "parser"
             [ test "parses spaces" <| \_ ->
-                Parser.run PS.parser Context.empty "   "
+                Run.run PS.parser Context.empty "   "
                     |> Expect.equal (Ok {})
             , test "parses newlines" <| \_ ->
-                Parser.run PS.parser Context.empty "\n"
+                Run.run PS.parser Context.empty "\n"
                     |> Expect.equal (Ok {})
             , test "parses mixed whitespace" <| \_ ->
-                Parser.run PS.parser Context.empty " \n \r "
+                Run.run PS.parser Context.empty " \n \r "
                     |> Expect.equal (Ok {})
             , test "parses empty string" <| \_ ->
-                Parser.run PS.parser Context.empty ""
+                Run.run PS.parser Context.empty ""
                     |> Expect.equal (Ok {})
             , test "can read from context where the first non-space col began" <| \_ ->
-                Parser.run payloadParser Context.empty "a"
+                Run.run payloadParser Context.empty "a"
                     |> expectLineStart 1
             , test "can read from context where the first non-space col began (indented)" <| \_ ->
-                Parser.run payloadParser Context.empty "   a"
+                Run.run payloadParser Context.empty "   a"
                     |> expectLineStart 4
             , test "setIndentToStartOfLine" <| \_ ->
                 let
@@ -39,13 +40,13 @@ tests =
                             |> Parser.skip PS.parser
                             |> Parser.keep (PS.scopeIndentToLineStart Parser.getPayload)
                 in
-                Parser.run setIndentParser Context.empty "    b"
+                Run.run setIndentParser Context.empty "    b"
                     |> Result.map .indent
                     |> Expect.equal (Ok 5)
             ]
     , describe "comments" <|
         [ test "parses line comments" <| \_ ->
-            Parser.run (parseToEnd payloadParser) Context.empty "-- this is a line comment"
+            Run.run (parseToEnd payloadParser) Context.empty "-- this is a line comment"
                 |> expectComment
                     (SourcePosition.at
                         { row = 1, col = 1 }
@@ -53,7 +54,7 @@ tests =
                         (Context.Line " this is a line comment" )
                     )
         , test "parses line comments even when prefixed with space" <| \_ ->
-            Parser.run (parseToEnd payloadParser) Context.empty "  -- this is a line comment"
+            Run.run (parseToEnd payloadParser) Context.empty "  -- this is a line comment"
                 |> expectComment
                     (SourcePosition.at
                         { row = 1, col = 3 }
@@ -61,7 +62,7 @@ tests =
                         (Context.Line " this is a line comment")
                     )
         , test "block comments" <| \_ ->
-            Parser.run (parseToEnd payloadParser) Context.empty "{- this is a block comment -}"
+            Run.run (parseToEnd payloadParser) Context.empty "{- this is a block comment -}"
                 |> expectComment
                     (SourcePosition.at
                         { row = 1, col = 1 }
@@ -69,7 +70,7 @@ tests =
                         (Context.Block " this is a block comment ")
                     )
         , test "nested block comment" <| \_ ->
-            Parser.run (parseToEnd payloadParser) Context.empty "{- checks for --, {- -} and {-| -} comments. -}"
+            Run.run (parseToEnd payloadParser) Context.empty "{- checks for --, {- -} and {-| -} comments. -}"
                 |> expectComment
                     (SourcePosition.at
                         { row = 1, col = 1 }
@@ -90,21 +91,21 @@ tests =
                 context =
                     { Context.empty | indent = 2 }
             in
-            Parser.run indentParser context "  x"
+            Run.run indentParser context "  x"
                 |> Expect.equal (Ok {})
         , test "fails when column is less than indent" <| \_ ->
             let
                 context =
                     { Context.empty | indent = 4 }
             in
-            Parser.run indentParser context "  x"
+            Run.run indentParser context "  x"
                 |> expectProblem
         , test "fails when column is 1" <| \_ ->
             let
                 context =
                     { Context.empty | indent = 1 }
             in
-            Parser.run indentParser context "x"
+            Run.run indentParser context "x"
                 |> expectProblem
         ]
     ]
@@ -131,21 +132,21 @@ parseToEnd p =
     Parser.skip (Parser.end PS.InvalidWhiteSpace) p
 
 
-expectComment : SourcePosition.Located Context.Comment -> Result x Context -> Expectation
+expectComment : Inspect x => SourcePosition.Located Context.Comment -> Result x Context -> Expectation
 expectComment comment resultContext =
     when resultContext is
         Err err ->
-            Expect.fail ("Failed to parse with error: " ++ Debug.toString err)
+            Expect.fail ("Failed to parse with error: " ++ inspect err)
 
         Ok ctx ->
             Expect.equal [ comment ] (Array.Builder.toArray ctx.comments)
 
 
-expectLineStart : Int -> Result x Context -> Expectation
+expectLineStart : Inspect x => Int -> Result x Context -> Expectation
 expectLineStart col resultContext =
     when resultContext is
         Err err ->
-            Expect.fail ("Failed to parse with error: " ++ Debug.toString err)
+            Expect.fail ("Failed to parse with error: " ++ inspect err)
 
         Ok ctx ->
             Expect.equal col ctx.lineStart

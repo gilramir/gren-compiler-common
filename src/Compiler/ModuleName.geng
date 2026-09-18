@@ -26,6 +26,7 @@ import Json.Encode as Encode
 
 {-| A valid module name like `Module.Name`.
 -}
+@derive(Eq, Inspect)
 type ModuleName
     = ModuleName String
 

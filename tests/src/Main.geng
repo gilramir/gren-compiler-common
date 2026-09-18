@@ -1,5 +1,6 @@
 module Main exposing (main)
 
+import Task exposing (Task)
 import Test
 import Test.Runner.Node as TestRunner
 import Test.SemanticVersion
@@ -21,9 +22,10 @@ import Test.Compiler.Parse.Type
 import Test.Compiler.Parse.Declaration
 import Test.Compiler.Parse.Classes
 import Test.Compiler.Parse.Module
+import Test.Compiler.Parse.Indentation
 
 
-main : TestRunner.Program
+main : Task Never {}
 main =
     TestRunner.run <|
         Test.describe "gren-lang/compiler-common tests"
@@ -46,4 +48,5 @@ main =
             , Test.Compiler.Parse.Declaration.tests
             , Test.Compiler.Parse.Classes.tests
             , Test.Compiler.Parse.Module.tests
+            , Test.Compiler.Parse.Indentation.tests
             ]

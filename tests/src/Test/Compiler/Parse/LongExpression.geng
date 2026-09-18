@@ -1,5 +1,6 @@
 module Test.Compiler.Parse.LongExpression exposing ( tests )
 
+import Test.Compiler.Parse.Run as Run
 import Expect exposing (Expectation)
 import Test exposing (Test, describe, test, fuzz)
 import Fuzz exposing (Fuzzer)
@@ -1161,6 +1162,6 @@ tests =
                 |> Dict.set "zimbabw" [ 195 ]
                 |> Dict.set "zimbabwe" [ 195 ]
             """
-                |> Parser.run PE.parser Context.empty
+                |> Run.run PE.parser Context.empty
                 |> Expect.ok
         ]

@@ -1,5 +1,6 @@
 module Test.Compiler.Parse.Module exposing ( tests )
 
+import Test.Compiler.Parse.Run as Run
 import Expect exposing (Expectation)
 import Test exposing (Test, describe, test, fuzz)
 import String.Parser.Advanced as Parser
@@ -14,7 +15,7 @@ tests : Test
 tests =
     describe "Parse.Module"
         [ test "Empty module" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 module MyModule exposing (..)
                 """
@@ -32,10 +33,12 @@ tests =
                     , instances = []
                     , unions = []
                     , aliases = []
+                    , prims = []
+                    , externs = []
                     , binops = []
                     }
         , test "Empty module with exposings (valid when parsing)" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 module MyModule exposing ( Model, Msg (..), (==), view )
                 """
@@ -81,22 +84,24 @@ tests =
                     , instances = []
                     , unions = []
                     , aliases = []
+                    , prims = []
+                    , externs = []
                     , binops = []
                     }
         , test "a `port module` is refused, naming what replaces it (D280)" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 port module PortModule exposing (..)
                 """
                 |> expectRefused "port module"
         , test "an `effect module` is refused before its `where` is read (D280)" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 effect module CmdModule where { command = MyCmd } exposing (..)
                 """
                 |> expectRefused "effect module"
         , test "Docs" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 module MyModule exposing (..)
 
@@ -121,10 +126,12 @@ tests =
                     , instances = []
                     , unions = []
                     , aliases = []
+                    , prims = []
+                    , externs = []
                     , binops = []
                     }
         , test "imports" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 module MyModule exposing (..)
 
@@ -156,10 +163,12 @@ tests =
                     , instances = []
                     , unions = []
                     , aliases = []
+                    , prims = []
+                    , externs = []
                     , binops = []
                     }
         , test "imports with alias" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 module MyModule exposing (..)
 
@@ -191,10 +200,12 @@ tests =
                     , instances = []
                     , unions = []
                     , aliases = []
+                    , prims = []
+                    , externs = []
                     , binops = []
                     }
         , test "imports with alias and exposing" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 module MyModule exposing (..)
 
@@ -248,10 +259,12 @@ tests =
                 , instances = []
                 , unions = []
                 , aliases = []
+                , prims = []
+                , externs = []
                 , binops = []
                 }
         , test "imports end positions" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 module MyModule exposing (..)
 
@@ -304,10 +317,12 @@ tests =
                 , instances = []
                 , unions = []
                 , aliases = []
+                , prims = []
+                , externs = []
                 , binops = []
                 }
         , test "operators" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 module MyModule exposing (..)
 
@@ -329,6 +344,8 @@ tests =
                     , instances = []
                     , unions = []
                     , aliases = []
+                    , prims = []
+                    , externs = []
                     , binops =
                         [ SourcePosition.at
                             { row = 3, col = 1 }
@@ -357,7 +374,7 @@ tests =
                         ]
                      }
          , test "Module with values, type aliases and unions" <| \_ ->
-             Parser.run PM.parser Context.empty
+             Run.run PM.parser Context.empty
                  """
                  module MyValues exposing (..)
 
@@ -393,6 +410,7 @@ tests =
                                           { row = 4, col = 1 }
                                           { row = 4, col = 4 }
                                           "num"
+                                  , capability = False
                                   , signature =
                                       Just
                                           { constraints = []
@@ -417,7 +435,7 @@ tests =
                                       SourcePosition.at
                                           { row = 4, col = 7 }
                                           { row = 4, col = 9 }
-                                          (AST.NumberLiteral (Number.Integer 25))
+                                          (AST.NumberLiteral (Number.Integer { text = "25", suffix = Nothing }))
                                   }
                              }
                           ]
@@ -524,10 +542,12 @@ tests =
                                  }
                             }
                          ]
+                    , prims = []
+                    , externs = []
                     , binops = []
                     }
          , test "Declaration after when expression" <| \_ ->
-             Parser.run PM.parser Context.empty
+             Run.run PM.parser Context.empty
                  """
                  module Test exposing (..)
 
@@ -552,6 +572,8 @@ tests =
                     , docs = Nothing
                     , imports = []
                     , aliases = []
+                    , prims = []
+                    , externs = []
                     , binops = []
                     , classes = []
                     , instances = []
@@ -567,6 +589,7 @@ tests =
                                             { row = 4, col = 1 }
                                             { row = 4, col = 4 }
                                             "foo"
+                                    , capability = False
                                     , signature =
                                         Just
                                             { constraints = []
@@ -627,7 +650,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 6, col = 9 }
                                                                 { row = 6, col = 10 }
-                                                                (AST.PInt { value = 0, isHex = False })
+                                                                (AST.PInt { isHex = False, text = "0", suffix = Nothing })
                                                         , body =
                                                             SourcePosition.at
                                                                 { row = 6, col = 14 }
@@ -638,7 +661,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 7, col = 9 }
                                                                 { row = 7, col = 10 }
-                                                                (AST.PInt { value = 1, isHex = False })
+                                                                (AST.PInt { isHex = False, text = "1", suffix = Nothing })
                                                         , body =
                                                             SourcePosition.at
                                                                 { row = 7, col = 14 }
@@ -671,6 +694,7 @@ tests =
                                             { row = 11, col = 1 }
                                             { row = 11, col = 4 }
                                             "bar"
+                                    , capability = False
                                     , signature =
                                         Just
                                             { constraints = []
@@ -744,7 +768,7 @@ tests =
                         ]
                     }
         , test "Function with documentation comment" <| \_ ->
-            Parser.run PM.parser Context.empty
+            Run.run PM.parser Context.empty
                 """
                 module MyModule exposing (..)
 
@@ -785,6 +809,7 @@ tests =
                                         { row = 9, col = 1 }
                                         { row = 9, col = 4 }
                                         "add"
+                                , capability = False
                                 , signature =
                                     Just
                                         { constraints = []
@@ -883,6 +908,8 @@ tests =
                     , instances = []
                     , unions = []
                     , aliases = []
+                    , prims = []
+                    , externs = []
                     , binops = []
                     }
         , describe "keyword boundaries"
@@ -890,7 +917,7 @@ tests =
             -- in the compiler uses `keyword`, so a keyword matched the prefix
             -- of an ordinary name and then failed on the rest of it.
             [ test "a declaration whose name starts with `import`" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module MyModule exposing (importantThing)
 
@@ -900,7 +927,7 @@ tests =
                     """
                     |> expectOk
             , test "a declaration named `port`, which is not a reserved word (D279)" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module MyModule exposing (port)
 
@@ -909,7 +936,7 @@ tests =
                     """
                     |> expectOk
             , test "a declaration whose name starts with `port`" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module MyModule exposing (portOfCall)
 
@@ -919,7 +946,7 @@ tests =
                     """
                     |> expectOk
             , test "a declaration whose name starts with `infix`" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module MyModule exposing (infixOf)
 
@@ -935,7 +962,7 @@ tests =
             -- Haskell parser accepts all three of these, which makes it a
             -- two-parser divergence rather than a shared limit.
             , test "a name starting with `type`, continued by a Latin-1 letter" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module MyModule exposing (typeé)
 
@@ -945,7 +972,7 @@ tests =
                     """
                     |> expectOk
             , test "a name starting with `type`, continued by a BMP letter" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module MyModule exposing (typeｚ)
 
@@ -955,7 +982,7 @@ tests =
                     """
                     |> expectOk
             , test "a name starting with `type`, continued by an astral letter" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module MyModule exposing (type𝐚)
 
@@ -965,7 +992,7 @@ tests =
                     """
                     |> expectOk
             , test "a name starting with `type`, continued by ASCII" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module MyModule exposing (typez)
 
@@ -982,7 +1009,7 @@ tests =
             -- the two is legal — so the recorded position pointed at the wrong
             -- row, and at a column where nothing begins.
             [ test "import on its own row" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module PosBug exposing (Foo)
 
@@ -992,7 +1019,7 @@ tests =
                     """
                     |> expectImportStart { row = 4, col = 1 }
             , test "type alias split across rows" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module PosBug exposing (Foo)
 
@@ -1003,7 +1030,7 @@ tests =
                     """
                     |> expectAliasStart { row = 4, col = 1 }
             , test "type split across rows" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module PosBug exposing (Foo)
 
@@ -1014,7 +1041,7 @@ tests =
                     """
                     |> expectUnionStart { row = 4, col = 1 }
             , test "a single-row import still starts at its own row" <| \_ ->
-                Parser.run PM.parser Context.empty
+                Run.run PM.parser Context.empty
                     """
                     module PosBug exposing (Foo)
 
@@ -1025,26 +1052,26 @@ tests =
         ]
 
 
-expectImportStart : SourcePosition.Position -> Result (Array (Parser.DeadEnd c e)) AST.Module -> Expectation
+expectImportStart : Inspect e => SourcePosition.Position -> Result (Array (Run.DeadEnd e)) AST.Module -> Expectation
 expectImportStart expected result =
     expectFirstStart expected (Result.map .imports result)
 
 
-expectAliasStart : SourcePosition.Position -> Result (Array (Parser.DeadEnd c e)) AST.Module -> Expectation
+expectAliasStart : Inspect e => SourcePosition.Position -> Result (Array (Run.DeadEnd e)) AST.Module -> Expectation
 expectAliasStart expected result =
     expectFirstStart expected (Result.map .aliases result)
 
 
-expectUnionStart : SourcePosition.Position -> Result (Array (Parser.DeadEnd c e)) AST.Module -> Expectation
+expectUnionStart : Inspect e => SourcePosition.Position -> Result (Array (Run.DeadEnd e)) AST.Module -> Expectation
 expectUnionStart expected result =
     expectFirstStart expected (Result.map .unions result)
 
 
-expectFirstStart : SourcePosition.Position -> Result (Array (Parser.DeadEnd c e)) (Array (SourcePosition.Located a)) -> Expectation
+expectFirstStart : Inspect e => SourcePosition.Position -> Result (Array (Run.DeadEnd e)) (Array (SourcePosition.Located a)) -> Expectation
 expectFirstStart expected result =
     when result is
         Err err ->
-            Expect.fail (Debug.toString err)
+            Expect.fail (inspect err)
 
         Ok items ->
             when Array.first items is
@@ -1055,7 +1082,7 @@ expectFirstStart expected result =
                     Expect.fail "Expected at least one declaration"
 
 
-expectRefused : String -> Result (Array (Parser.DeadEnd c PM.Error)) a -> Expectation
+expectRefused : String -> Result (Array (Run.DeadEnd PM.Error)) a -> Expectation
 expectRefused header result =
     when result is
         Err deadEnds ->
@@ -1067,21 +1094,21 @@ expectRefused header result =
             Expect.fail ("a `" ++ header ++ "` was accepted")
 
 
-expectOk : Result (Array (Parser.DeadEnd c e)) a -> Expectation
+expectOk : Inspect e => Result (Array (Run.DeadEnd e)) a -> Expectation
 expectOk result =
     when result is
         Err err ->
-            Expect.fail (Debug.toString err)
+            Expect.fail (inspect err)
 
         Ok _ ->
             Expect.pass
 
 
-expect : AST.Module -> Result (Array (Parser.DeadEnd c e)) AST.Module -> Expectation
+expect : Inspect e => AST.Module -> Result (Array (Run.DeadEnd e)) AST.Module -> Expectation
 expect expected result =
     when result is
         Err err ->
-            Expect.fail (Debug.toString err)
+            Expect.fail (inspect err)
 
         Ok res ->
             Expect.equal expected res

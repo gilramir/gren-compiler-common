@@ -1,0 +1,219 @@
+module Test.Compiler.Parse.Indentation exposing (tests)
+
+{-| Where a `when`'s branches and a call's arguments may be, held to what the
+Haskell parser in `compiler/src/Parse` accepts, since the two parsers must read
+the same language (D86; geng-lang `m1b-test.md` §TS8.4).
+
+The Haskell parser takes a `when`'s indentation from its first branch
+(`withIndent`) and requires every other branch at that column
+(`checkAligned`), and it holds an argument to the enclosing indentation
+(`checkIndent`). This parser used to hold both to the column of the line they
+began on, and so refused two layouts in this package's own sources that
+`geng make` compiles, and read a third as a different program: upstream's
+`compiler-common#11` and `#14`. Each test renders what was parsed compactly, so what it
+checks is the shape: which branches belong to which `when`, and which terms
+are arguments.
+-}
+
+import Compiler.Ast.Source as AST
+import Compiler.Parse.Context as Context
+import Compiler.Parse.Declaration as PD
+import Compiler.Parse.Expression as PE
+import Compiler.Parse.Number as Number
+import Expect exposing (Expectation)
+import String.Parser.Advanced as Parser
+import Test exposing (Test, describe, test)
+import Test.Compiler.Parse.Run as Run
+
+
+tests : Test
+tests =
+    describe "Indentation, as the Haskell parser has it"
+        [ describe "when"
+            [ test "branches at the column of a `when` that begins a line (SemanticVersionRange.fromString)" <| \{} ->
+                """
+                when a is
+                    X ->
+                        when
+                            b
+                        is
+                        P ->
+                            1
+
+                        _ ->
+                            2
+
+                    Y ->
+                        3
+                """
+                    |> expression
+                    |> Expect.equal (Ok "when a [X -> when b [P -> 1, _ -> 2], Y -> 3]")
+            , test "branches to the right of the `when`" <| \{} ->
+                """
+                when a is
+                    X -> 1
+                    Y -> 2
+                """
+                    |> expression
+                    |> Expect.equal (Ok "when a [X -> 1, Y -> 2]")
+            , test "the first branch on the `is` line sets the column" <| \{} ->
+                """
+                when a is X -> 1
+                          Y -> 2
+                """
+                    |> expression
+                    |> Expect.equal (Ok "when a [X -> 1, Y -> 2]")
+            , test "a nested `when` ends at a branch of the outer one" <| \{} ->
+                """
+                when a is
+                    X ->
+                        when b is
+                            P -> 1
+                    Y -> 2
+                """
+                    |> expression
+                    |> Expect.equal (Ok "when a [X -> when b [P -> 1], Y -> 2]")
+            , test "a branch to the right of the first is not a branch" <| \{} ->
+                """
+                when a is
+                    X -> 1
+                      Y -> 2
+                """
+                    |> expression
+                    |> Expect.err
+            , test "a first branch not to the right of the enclosing indentation is refused" <| \{} ->
+                """
+                f =
+                    when a is
+                X -> 1
+                """
+                    |> declaration
+                    |> Expect.err
+            ]
+        , describe "arguments"
+            [ test "an argument on the next line at its function's column (Parse.Pattern.topLevelParser)" <| \{} ->
+                """
+                f =
+                    g
+                    (x)
+                """
+                    |> declaration
+                    |> Expect.equal (Ok "f = g((x))")
+            , test "an argument to the right of its function" <| \{} ->
+                """
+                f =
+                    g
+                        x
+                        y
+                """
+                    |> declaration
+                    |> Expect.equal (Ok "f = g(x, y)")
+            , test "a qualified function takes one the same way" <| \{} ->
+                """
+                f =
+                    M.g
+                    x
+                """
+                    |> declaration
+                    |> Expect.equal (Ok "f = M.g(x)")
+            , test "a term at the definition's column is not an argument" <| \{} ->
+                """
+                f =
+                    g
+                x
+                """
+                    |> declaration
+                    |> Expect.equal (Ok "f = g")
+            , test "a lambda's body keeps a same-column argument (compiler-common#14's mis-parse)" <| \{} ->
+                """
+                v = \\q ->
+                          fn one
+                          two
+                """
+                    |> declaration
+                    |> Expect.equal (Ok "v = \\q -> fn(one, two)")
+            , test "a branch's body ends at the next branch" <| \{} ->
+                """
+                when a is
+                    X ->
+                        g
+                    Y ->
+                        h
+                """
+                    |> expression
+                    |> Expect.equal (Ok "when a [X -> g, Y -> h]")
+            ]
+        ]
+
+
+{-| An expression, which must be the whole of the source. -}
+expression : String -> Result String String
+expression source =
+    Run.run (Parser.succeed identity |> Parser.keep PE.parser |> Parser.skip (Parser.end PE.InternalError)) Context.empty source
+        |> Result.mapError (\_ -> "refused")
+        |> Result.map show
+
+
+{-| A value declaration, rendered `name = body`; the rest of the source is
+left unread, so what is not part of it can be seen not to be. -}
+declaration : String -> Result String String
+declaration source =
+    Run.run PD.parser Context.empty source
+        |> Result.mapError (\_ -> "refused")
+        |> Result.andThen
+            (\decl ->
+                when decl.value is
+                    PD.Value value ->
+                        Ok (value.name.value ++ " = " ++ show value.body)
+
+                    _ ->
+                        Err "not a value"
+            )
+
+
+show : AST.Expression -> String
+show expr =
+    when expr.value is
+        AST.Var { name } ->
+            name
+
+        AST.VarQual { qualifier, name } ->
+            qualifier ++ "." ++ name
+
+        AST.NumberLiteral (Number.Integer { text }) ->
+            text
+
+        AST.Parens inner ->
+            "(" ++ show inner ++ ")"
+
+        AST.Call { fn, args } ->
+            show fn ++ "(" ++ String.join ", " (Array.map show args) ++ ")"
+
+        AST.Lambda { patterns, body } ->
+            "\\" ++ String.join " " (Array.map pattern patterns) ++ " -> " ++ show body
+
+        AST.When when_ ->
+            "when "
+                ++ show when_.expression
+                ++ " ["
+                ++ String.join ", " (Array.map (\b -> pattern b.pattern ++ " -> " ++ show b.body) when_.branches)
+                ++ "]"
+
+        _ ->
+            "?"
+
+
+pattern : AST.Pattern -> String
+pattern p =
+    when p.value is
+        AST.PCtor { name } ->
+            name.value
+
+        AST.PAnything _ ->
+            "_"
+
+        AST.PVar name ->
+            name
+
+        _ ->
+            "?"
