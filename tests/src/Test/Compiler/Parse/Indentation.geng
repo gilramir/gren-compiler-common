@@ -10,7 +10,10 @@ The Haskell parser takes a `when`'s indentation from its first branch
 (`checkIndent`). This parser used to hold both to the column of the line they
 began on, and so refused two layouts in this package's own sources that
 `geng make` compiles, and read a third as a different program: upstream's
-`compiler-common#11` and `#14`. Each test renders what was parsed compactly, so what it
+`compiler-common#11` and `#14`. The Haskell parser also never applies an `if`,
+`when`, `let` or lambda to an argument, since none of them is a term; this one
+did, to a token the block had refused, and took a lambda as an argument, both of
+which `geng make` refuses (geng-lang `m1a-fmt.md` §F19). Each test renders what was parsed compactly, so what it
 checks is the shape: which branches belong to which `when`, and which terms
 are arguments.
 -}
@@ -144,6 +147,59 @@ tests =
                     |> expression
                     |> Expect.equal (Ok "when a [X -> g, Y -> h]")
             ]
+        , describe "a block: `if`, `when`, `let` or a lambda"
+            [ test "a token left of a `when`'s branches is not an argument of the `when`" <| \{} ->
+                """
+                when a is
+                    X ->
+                        g
+                  y
+                """
+                    |> expression
+                    |> Expect.equal (Err "refused")
+            , test "the declaration ends at the `when` and the token is left unread" <| \{} ->
+                """
+                f =
+                    when a is
+                        X ->
+                            g
+                   y
+                """
+                    |> declaration
+                    |> Expect.equal (Ok "f = when a [X -> g]")
+            , test "nor of a `when` that is an operator's last operand" <| \{} ->
+                """
+                x + when a is
+                        X -> g
+                  y
+                """
+                    |> expression
+                    |> Expect.equal (Err "refused")
+            , test "an `if` is an operator's last operand" <| \{} ->
+                "1 + if a then b else c"
+                    |> expression
+                    |> Expect.equal (Ok "(1 + if a then b else c)")
+            , test "an operator after it belongs to the `else` branch" <| \{} ->
+                "1 + if a then b else c + d"
+                    |> expression
+                    |> Expect.equal (Ok "(1 + if a then b else (c + d))")
+            , test "a parenthesized block takes an argument" <| \{} ->
+                "(if a then f else g) x"
+                    |> expression
+                    |> Expect.equal (Ok "(if a then f else g)(x)")
+            , test "a lambda is not an argument" <| \{} ->
+                "f a \\b -> b"
+                    |> expression
+                    |> Expect.equal (Err "refused")
+            , test "a parenthesized lambda is" <| \{} ->
+                "f a (\\b -> b)"
+                    |> expression
+                    |> Expect.equal (Ok "f(a, (\\b -> b))")
+            , test "a lambda is an operator's last operand" <| \{} ->
+                "f <| \\b -> b + 1"
+                    |> expression
+                    |> Expect.equal (Ok "(f <| \\b -> (b + 1))")
+            ]
         , describe "a declaration's head"
             [ test "a type variable on a row of its own, indented" <| \{} ->
                 """
@@ -267,6 +323,14 @@ show expr =
 
         AST.Call { fn, args } ->
             show fn ++ "(" ++ String.join ", " (Array.map show args) ++ ")"
+
+        AST.Binops { left, operator, right } ->
+            "(" ++ show left ++ " " ++ operator.value ++ " " ++ show right ++ ")"
+
+        AST.If if_ ->
+            String.join ""
+                (Array.map (\b -> "if " ++ show b.test ++ " then " ++ show b.body ++ " else ") if_.branches)
+                ++ show if_.elseBranch
 
         AST.Lambda { patterns, body } ->
             "\\" ++ String.join " " (Array.map pattern patterns) ++ " -> " ++ show body

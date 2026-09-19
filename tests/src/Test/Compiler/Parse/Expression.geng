@@ -244,57 +244,6 @@ tests =
                                 ]
                             }
                         )
-            , test "function calls with lambda" <| \_ ->
-                Run.run PE.parser Context.empty "myFunc a \\b -> b + 1"
-                    |> expectExpression
-                        (AST.Call
-                            { fn =
-                                SourcePosition.at
-                                    { row = 1, col = 1 }
-                                    { row = 1, col = 7 }
-                                    (AST.Var { name = "myFunc", varType = AST.LowVar })
-                            , args =
-                                [ SourcePosition.at
-                                    { row = 1, col = 8 }
-                                    { row = 1, col = 9 }
-                                    (AST.Var { name = "a", varType = AST.LowVar })
-                                , SourcePosition.at
-                                    { row = 1, col = 10 }
-                                    { row = 1, col = 21 }
-                                    (AST.Lambda
-                                        { patterns =
-                                            [ SourcePosition.at
-                                                { row = 1, col = 11 }
-                                                { row = 1, col = 12 }
-                                                (AST.PVar "b")
-                                            ]
-                                        , body =
-                                            SourcePosition.at
-                                                { row = 1, col = 16 }
-                                                { row = 1, col = 21 }
-                                                (AST.Binops
-                                                    { left =
-                                                        SourcePosition.at
-                                                            { row = 1, col = 16 }
-                                                            { row = 1, col = 17 }
-                                                            (AST.Var { name = "b", varType = AST.LowVar })
-                                                    , operator =
-                                                        SourcePosition.at
-                                                            { row = 1, col = 18 }
-                                                            { row = 1, col = 19 }
-                                                            "+"
-                                                    , right =
-                                                        SourcePosition.at
-                                                            { row = 1, col = 20 }
-                                                            { row = 1, col = 21 }
-                                                            (AST.NumberLiteral (Number.Integer { text = "1" }))
-                                                    }
-                                                )
-                                        }
-                                    )
-                                ]
-                            }
-                        )
             , test "accessor after function call" <| \_ ->
                 Run.run PE.parser Context.empty "(func a b).c"
                     |> expectLocatedExpression

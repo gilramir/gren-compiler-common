@@ -108,56 +108,68 @@ errorToString error =
 -}
 parser : Parser Context Error AST.Expression
 parser =
-    parserNoArgs
-        |> Parser.andThen
-            (\firstTerm ->
-                let
-                    completionParser =
-                        Parser.succeed identity
-                            |> Parser.skip spaceParser
-                            |> Parser.keep
-                                (Parser.loop
-                                    { currentTerm = firstTerm, currentArgs = [], incompleteBinop = Nothing }
-                                    argOrOperatorLoop
-                                )
-                            |> Parser.map
-                                (\state ->
-                                    let
-                                        finalExpression =
-                                            toCall state.currentTerm state.currentArgs
-                                    in
-                                    when state.incompleteBinop is
-                                        Just incomplete ->
-                                            SourcePosition.at
-                                                incomplete.left.start
-                                                finalExpression.end
-                                                (AST.Binops
-                                                    { left = incomplete.left
-                                                    , operator = incomplete.operator
-                                                    , right = finalExpression
-                                                    }
-                                                )
+    Parser.oneOf
+        [ blockParser
+            |> Parser.skip spaceParser
+        , possiblyNegativeTerm
+            |> Parser.andThen
+                (\firstTerm ->
+                    let
+                        completionParser =
+                            Parser.succeed identity
+                                |> Parser.skip spaceParser
+                                |> Parser.keep
+                                    (Parser.loop
+                                        { currentTerm = firstTerm, currentArgs = [], incompleteBinop = Nothing }
+                                        argOrOperatorLoop
+                                    )
+                                |> Parser.map
+                                    (\state ->
+                                        let
+                                            finalExpression =
+                                                toCall state.currentTerm state.currentArgs
+                                        in
+                                        when state.incompleteBinop is
+                                            Just incomplete ->
+                                                SourcePosition.at
+                                                    incomplete.left.start
+                                                    finalExpression.end
+                                                    (AST.Binops
+                                                        { left = incomplete.left
+                                                        , operator = incomplete.operator
+                                                        , right = finalExpression
+                                                        }
+                                                    )
                                         
-                                        Nothing ->
-                                            finalExpression
-                                )
-                in
-                -- An argument is to the right of the enclosing indentation, as
-                -- the Haskell parser's `checkIndent` has it (D86). A call whose
-                -- function is a name used to be scoped to the line it began on,
-                -- and so refused an argument on the next line at the name's own
-                -- column, which `geng make` compiles.
-                completionParser
-            )
+                                            Nothing ->
+                                                finalExpression
+                                    )
+                    in
+                    -- An argument is to the right of the enclosing indentation, as
+                    -- the Haskell parser's `checkIndent` has it (D86). A call whose
+                    -- function is a name used to be scoped to the line it began on,
+                    -- and so refused an argument on the next line at the name's own
+                    -- column, which `geng make` compiles.
+                    completionParser
+                )
+        ]
 
 
-parserNoArgs : Parser Context Error AST.Expression
-parserNoArgs =
+{-| An `if`, `when`, `let` or lambda, which runs as far as it can and so is
+never a term: not a function applied to arguments, not an argument, and not an
+operator's left operand. It is a whole expression, or the last operand of an
+operator, as the Haskell parser's `expressionOpen` and `chompExprEnd` have it
+(D86). Reading on after one took a token the block had refused, one left of a
+`when`'s branches, as an argument applied to the whole `when`, which `geng make`
+refuses.
+-}
+blockParser : Parser Context Error AST.Expression
+blockParser =
     Parser.oneOf
         [ ifParser
         , whenParser
         , letParser
-        , possiblyNegativeTerm
+        , lambdaParser
         ]
 
 
@@ -187,13 +199,11 @@ argOrOperatorLoop state =
                                             |> Parser.keep term
 
                                     else
-                                        Parser.succeed (\nextTerm -> Parser.Loop <| pushStateOperator nextTerm operator state)
-                                            |> Parser.keep parserNoArgs
+                                        rightOperand operator state
                                 )
 
                     else
-                        Parser.succeed (\nextTerm -> Parser.Loop <| pushStateOperator nextTerm operator state)
-                            |> Parser.keep parserNoArgs
+                        rightOperand operator state
                 )
                 |> Parser.skip spaceParser
         , Parser.succeed (\arg -> Parser.Loop <| pushStateArg arg state)
@@ -201,6 +211,19 @@ argOrOperatorLoop state =
             |> Parser.keep term
             |> Parser.skip spaceParser
         , Parser.succeed (Parser.Done state)
+        ]
+
+
+{-| What follows an operator. A block is the last operand and ends the
+expression; a term may be followed by arguments and more operators.
+-}
+rightOperand : SourcePosition.Located String -> ArgOrOperatorState -> Parser Context Error (Parser.Step ArgOrOperatorState ArgOrOperatorState)
+rightOperand operator state =
+    Parser.oneOf
+        [ Parser.succeed (\block -> Parser.Done <| pushStateOperator block operator state)
+            |> Parser.keep blockParser
+        , Parser.succeed (\nextTerm -> Parser.Loop <| pushStateOperator nextTerm operator state)
+            |> Parser.keep possiblyNegativeTerm
         ]
 
 
@@ -573,6 +596,14 @@ aligned column =
 -- FUNCTION
 
 
+lambdaParser : Parser Context Error AST.Expression
+lambdaParser =
+    Parser.succeed (\start expr end -> SourcePosition.at start end expr)
+        |> Parser.keep Parser.getPosition
+        |> Parser.keep function
+        |> Parser.keep Parser.getPosition
+
+
 function : Parser Context Error AST.Expression_
 function =
     Parser.succeed identity
@@ -690,7 +721,6 @@ term =
                                 |> Parser.andThen parenthesizedEnd
                             ]
                         )
-                , function
                 , lowerCaseVariable
                     |> Parser.map (\name -> AST.Var { name = name, varType = AST.LowVar })
                 , Variable.foreignVar
