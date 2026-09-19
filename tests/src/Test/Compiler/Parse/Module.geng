@@ -454,6 +454,7 @@ tests =
                                           "Choice"
                                   , vars = []
                                   , derives = []
+                                  , keyword = { row = 11, col = 1 }
                                   , variants =
                                       [ SourcePosition.at
                                           { row = 12, col = 5 }

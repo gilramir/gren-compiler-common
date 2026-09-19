@@ -162,6 +162,24 @@ tests =
                     type UserId
                         = UserId Int
                     """
+            , test "the `type` keyword's position is recorded, below a comment under the attribute" <| \_ ->
+                """
+                @derive(Eq) {- a
+                   b -} -- c
+                type UserId
+                    = UserId Int
+                """
+                    |> Run.run PD.parser Context.empty
+                    |> Result.map
+                        (\decl ->
+                            when decl.value is
+                                PD.Union u ->
+                                    Just u.keyword
+
+                                _ ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just { row = 3, col = 1 }))
             , test "a custom type without it derives nothing here" <| \_ ->
                 expectDecl
                     (AUnion { name = "UserId", derives = [] })

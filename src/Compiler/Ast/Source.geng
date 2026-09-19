@@ -285,13 +285,16 @@ type alias Alias =
   }
 
 
-{-|
+{-| `keyword` is where `type` starts. Without `@derive` that is where the
+declaration does; with it, the declaration starts at the `@` and the keyword
+can be any number of rows below, past comments, so it is recorded.
 -}
 type alias Union =
   { name : SourcePosition.Located String
   , vars : Array (SourcePosition.Located String)
   , variants : Array (SourcePosition.Located UnionVariant)
   , derives : Array (SourcePosition.Located String)
+  , keyword : SourcePosition.Position
   }
 
 

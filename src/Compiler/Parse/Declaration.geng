@@ -699,6 +699,12 @@ docParser toErr =
 
 typeParser : Array (SourcePosition.Located String) -> Parser Context Error DeclarationValue
 typeParser derives =
+    Parser.getPosition
+        |> Parser.andThen (typeKeywordParser derives)
+
+
+typeKeywordParser : Array (SourcePosition.Located String) -> SourcePosition.Position -> Parser Context Error DeclarationValue
+typeKeywordParser derives keyword =
     Parser.succeed identity
         |> Parser.skip (Variable.keyword "type" (ExpectedKeyword "type"))
         |> Parser.skip spaceParser
@@ -714,7 +720,7 @@ typeParser derives =
                     Parser.succeed identity
                         |> Parser.skip (Parser.backtrackable (Variable.keyword "alias" (ExpectedKeyword "alias")))
                         |> Parser.keep (Parser.problem AttributeNotOnCustomType)
-                , unionParser derives
+                , unionParser derives keyword
                 ]
             )
 
@@ -763,8 +769,8 @@ indentedParser parser_ =
         |> Parser.keep parser_
 
 
-unionParser : Array (SourcePosition.Located String) -> Parser Context Error DeclarationValue
-unionParser derives =
+unionParser : Array (SourcePosition.Located String) -> SourcePosition.Position -> Parser Context Error DeclarationValue
+unionParser derives keyword =
     Parser.succeed
         (\name vars variants ->
             Union
@@ -772,6 +778,7 @@ unionParser derives =
                 , vars = vars
                 , variants = variants
                 , derives = derives
+                , keyword = keyword
                 }
         )
         |> Parser.keep (SourcePosition.parser upperCaseVariable)

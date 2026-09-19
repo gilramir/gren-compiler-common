@@ -206,6 +206,7 @@ tests =
                                     "Direction"
                             , vars = []
                             , derives = []
+                            , keyword = { row = 1, col = 1 }
                             , variants =
                                 [ SourcePosition.at
                                     { row = 2, col = 7 }
@@ -253,6 +254,7 @@ tests =
                                     "Direction"
                             , vars = []
                             , derives = []
+                            , keyword = { row = 3, col = 1 }
                             , variants =
                                 [ SourcePosition.at
                                     { row = 4, col = 7 }
@@ -298,6 +300,7 @@ tests =
                                     "a"
                                 ]
                             , derives = []
+                            , keyword = { row = 1, col = 1 }
                             , variants =
                                 [ SourcePosition.at
                                     { row = 2, col = 7 }
@@ -591,6 +594,7 @@ tests =
                                     "Foo"
                             , vars = []
                             , derives = []
+                            , keyword = { row = 1, col = 1 }
                             , variants =
                                 [ SourcePosition.at
                                     { row = 2, col = 5 }
