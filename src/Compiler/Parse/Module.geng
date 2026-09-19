@@ -438,13 +438,19 @@ declarationToModuleValue decl =
     when decl.value is
         Declaration.Value v ->
             let
+                -- A value under `@capability` begins at the attribute, which
+                -- is a row above its annotation's start.
                 start =
-                    when v.signature is
-                        Nothing ->
-                            v.name.start
+                    if v.capability then
+                        decl.start
 
-                        Just ts ->
-                            ts.start
+                    else
+                        when v.signature is
+                            Nothing ->
+                                v.name.start
+
+                            Just ts ->
+                                ts.start
             in
             Just <|
                 SourcePosition.at

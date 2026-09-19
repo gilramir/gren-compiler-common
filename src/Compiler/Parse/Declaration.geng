@@ -178,8 +178,13 @@ declarationValueParser { docs, start, attribute } =
 
         -- A capability is minted by an ordinary value (D258), so what follows
         -- is a value declaration and nothing else.
+        --
+        -- The annotation starts where its name does, on a row after the
+        -- attribute's, not at the `@`: the formatter anchors the name there, and
+        -- at the `@` a comment written after `@capability` sorted after it.
         Capability_ ->
-            valueParser True start
+            Parser.getPosition
+                |> Parser.andThen (\sigStart -> valueParser True sigStart)
                 |> Parser.andThen
                     (\value ->
                         when value is
@@ -498,13 +503,13 @@ classParser =
                 )
             )
         |> Parser.skip spaceParser
-        |> Parser.keep (SourcePosition.parser lowerCaseVariable)
+        |> Parser.keep (indentedParser (SourcePosition.parser lowerCaseVariable))
         |> Parser.keep
             (Parser.oneOf
                 [ Parser.backtrackable
                     (Parser.succeed identity
                         |> Parser.skip spaceParser
-                        |> Parser.skip (Variable.keyword "where" (ExpectedKeyword "where"))
+                        |> Parser.skip (indentedParser (Variable.keyword "where" (ExpectedKeyword "where")))
                         |> Parser.skip spaceParser
                         |> Parser.keep (blockParser classMethodParser)
                     )
@@ -735,14 +740,27 @@ aliasParser =
 
 typeArgLoopParser : Array (SourcePosition.Located String) -> Parser Context Error (Parser.Step (Array (SourcePosition.Located String)) (Array (SourcePosition.Located String)))
 typeArgLoopParser vars =
-    Parser.oneOf
-        [ Parser.succeed (Parser.Done vars)
-            |> Parser.skip (Parser.chompChar '=' (ExpectedChar '='))
-        , Parser.succeed
-            (\var -> Parser.Loop <| Array.pushLast var vars)
-            |> Parser.keep (SourcePosition.parser lowerCaseVariable)
-            |> Parser.skip spaceParser
-        ]
+    -- Held to the enclosing indentation, as the Haskell parser holds a type's
+    -- head: a variable or the `=` in column 1 starts no declaration there, and
+    -- it did here (upstream's `type-head-column-one` report).
+    indentedParser
+        (Parser.oneOf
+            [ Parser.succeed (Parser.Done vars)
+                |> Parser.skip (Parser.chompChar '=' (ExpectedChar '='))
+            , Parser.succeed
+                (\var -> Parser.Loop <| Array.pushLast var vars)
+                |> Parser.keep (SourcePosition.parser lowerCaseVariable)
+                |> Parser.skip spaceParser
+            ]
+        )
+
+
+{-| A parser that must start past the enclosing indentation. -}
+indentedParser : Parser Context Error a -> Parser Context Error a
+indentedParser parser_ =
+    Parser.succeed identity
+        |> Parser.skip (Parser.mapError (\_ -> IndentationError) Space.checkIndent)
+        |> Parser.keep parser_
 
 
 unionParser : Array (SourcePosition.Located String) -> Parser Context Error DeclarationValue

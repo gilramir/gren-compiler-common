@@ -20,6 +20,7 @@ import Compiler.Parse.Context as Context
 import Compiler.Parse.Declaration as PD
 import Compiler.Parse.Expression as PE
 import Compiler.Parse.Number as Number
+import Compiler.Parse.Space as Space
 import Expect exposing (Expectation)
 import String.Parser.Advanced as Parser
 import Test exposing (Test, describe, test)
@@ -143,7 +144,85 @@ tests =
                     |> expression
                     |> Expect.equal (Ok "when a [X -> g, Y -> h]")
             ]
+        , describe "a declaration's head"
+            [ test "a type variable on a row of its own, indented" <| \{} ->
+                """
+                type Foo -- c
+                    a
+                    = Foo a
+                """
+                    |> head
+                    |> Expect.equal "accepted"
+            , test "a type variable in column 1 is refused" <| \{} ->
+                """
+                type Foo -- c
+                a
+                    = Foo a
+                """
+                    |> head
+                    |> Expect.equal "refused"
+            , test "an alias's variable in column 1 is refused" <| \{} ->
+                """
+                type alias Bar
+                a =
+                    Maybe a
+                """
+                    |> head
+                    |> Expect.equal "refused"
+            , test "a custom type's `=` in column 1 is refused" <| \{} ->
+                """
+                type Foo a
+                = Foo a
+                """
+                    |> head
+                    |> Expect.equal "refused"
+            , test "a class variable in column 1 is refused" <| \{} ->
+                """
+                class Show -- c
+                a where
+                    show : a -> String
+                """
+                    |> head
+                    |> Expect.equal "refused"
+            , test "a class's `where` in column 1 is refused" <| \{} ->
+                """
+                class Show a
+                where
+                    show : a -> String
+                """
+                    |> head
+                    |> Expect.equal "refused"
+            , test "a class head continued on an indented row" <| \{} ->
+                """
+                class Show -- c
+                    a where
+                    show : a -> String
+                """
+                    |> head
+                    |> Expect.equal "accepted"
+            ]
         ]
+
+
+{-| Whether a declaration parses, which is the whole question for a head: the
+Haskell parser refuses a head continued in column 1, where only a new
+declaration may start (`gren make` 0.6.6 says `UNFINISHED CUSTOM TYPE`,
+`UNFINISHED TYPE ALIAS`, `UNFINISHED CLASS DECLARATION`, `RESERVED WORD`).
+-}
+head : String -> String
+head source =
+    let
+        whole =
+            PD.parser
+                |> Parser.skip (Parser.mapError PD.SpaceError Space.parser)
+                |> Parser.skip (Parser.end (PD.ExpectedKeyword "end"))
+    in
+    when Run.run whole Context.empty source is
+        Ok _ ->
+            "accepted"
+
+        Err _ ->
+            "refused"
 
 
 {-| An expression, which must be the whole of the source. -}
