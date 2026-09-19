@@ -1944,7 +1944,104 @@ tests =
                 Run.run PE.parser Context.empty "{ x = 1 } .x"
                     |> expectCallWithAccessorArg
             ]
+        , describe "annotations (D358)"
+            -- `(e : T)` is an `Annotated` inside the `Parens`, which is where
+            -- the Haskell parser puts it too. The expression ends in front of
+            -- the colon because the operator parser refuses a lone `:`.
+            [ test "a literal" <| \_ ->
+                Run.run PE.parser Context.empty "(5 : Int64)"
+                    |> expectExpression
+                        (AST.Parens
+                            (SourcePosition.at
+                                { row = 1, col = 2 }
+                                { row = 1, col = 11 }
+                                (AST.Annotated
+                                    { expression =
+                                        SourcePosition.at
+                                            { row = 1, col = 2 }
+                                            { row = 1, col = 3 }
+                                            (AST.NumberLiteral (Number.Integer { text = "5", suffix = Nothing }))
+                                    , annotation =
+                                        SourcePosition.at
+                                            { row = 1, col = 6 }
+                                            { row = 1, col = 11 }
+                                            (AST.TType
+                                                { name = SourcePosition.at { row = 1, col = 6 } { row = 1, col = 11 } "Int64"
+                                                , args = []
+                                                }
+                                            )
+                                    }
+                                )
+                            )
+                        )
+            , test "a negative literal" <| \_ ->
+                Run.run PE.parser Context.empty "(-1 : Int8)"
+                    |> expectAnnotatedWith
+                        (\e ->
+                            when e is
+                                AST.Negate _ ->
+                                    True
+
+                                _ ->
+                                    False
+                        )
+            , test "a lambda: the colon ends its body" <| \_ ->
+                Run.run PE.parser Context.empty "(\\x -> x + 1 : Int -> Int)"
+                    |> expectAnnotatedWith
+                        (\e ->
+                            when e is
+                                AST.Lambda _ ->
+                                    True
+
+                                _ ->
+                                    False
+                        )
+            , test "a call, across rows" <| \_ ->
+                Run.run PE.parser Context.empty "(f x\n    : Array Int\n)"
+                    |> expectAnnotatedWith
+                        (\e ->
+                            when e is
+                                AST.Call _ ->
+                                    True
+
+                                _ ->
+                                    False
+                        )
+            , test "a field access follows it" <| \_ ->
+                Run.run PE.parser Context.empty "({ a = 1 } : { a : UInt8 }).a"
+                    |> expectAccessOf "a"
+            , test "a class context is refused" <| \_ ->
+                Run.run PE.parser Context.empty "(1 : Num a => a)"
+                    |> expectRefused
+            ]
         ]
+
+
+expectRefused : Result e a -> Expectation
+expectRefused result =
+    when result is
+        Ok _ ->
+            Expect.fail "parsed"
+
+        Err _ ->
+            Expect.pass
+
+
+expectAnnotatedWith : Inspect e => (AST.Expression_ -> Bool) -> Result (Array (Run.DeadEnd e)) AST.Expression -> Expectation
+expectAnnotatedWith isExpected result =
+    when result is
+        Ok { value = AST.Parens { value = AST.Annotated { expression } } } ->
+            if isExpected expression.value then
+                Expect.pass
+
+            else
+                Expect.fail ("annotated the wrong expression: " ++ inspect expression.value)
+
+        Ok { value } ->
+            Expect.fail ("not an annotation: " ++ inspect value)
+
+        Err err ->
+            Expect.fail (inspect err)
 
 
 expectAccessOf : Inspect e => String -> Result (Array (Run.DeadEnd e)) AST.Expression -> Expectation

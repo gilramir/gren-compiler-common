@@ -621,6 +621,36 @@ possiblyNegativeTerm =
         ]
 
 
+
+{-| The end of a parenthesized expression: `)`, or an annotation and then `)`.
+
+`(e : T)` is D358 (`docs/expr-annotation.md` §EA8 in geng-lang). The
+expression has already stopped in front of the colon, because `operatorParser`
+refuses a lone `:` and backtracks. The type is `Type.expression` rather than
+`Type.annotation`, so a class context is refused here as the Haskell parser
+refuses it (D86). An annotated expression is an `Annotated` inside the `Parens`,
+which is where the Haskell parser puts it too.
+-}
+parenthesizedEnd : AST.Expression -> Parser Context Error AST.Expression
+parenthesizedEnd expr =
+    Parser.oneOf
+        [ Parser.succeed expr
+            |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+        , Parser.succeed
+            (\tipe ->
+                SourcePosition.at
+                    expr.start
+                    tipe.end
+                    (AST.Annotated { expression = expr, annotation = tipe })
+            )
+            |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
+            |> Parser.skip spaceParser
+            |> Parser.keep (Type.expression |> Parser.mapError TypeError)
+            |> Parser.skip spaceParser
+            |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+        ]
+
+
 term : Parser Context Error AST.Expression
 term =
     Parser.succeed (\start expr end -> SourcePosition.at start end expr)
@@ -657,7 +687,7 @@ term =
                                 |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
                              , Parser.lazy (\_ -> parser)
                                 |> Parser.skip spaceParser
-                                |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+                                |> Parser.andThen parenthesizedEnd
                             ]
                         )
                 , function

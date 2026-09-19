@@ -105,6 +105,10 @@ type Expression_
     , accessor : String
     }
   | Parens Expression
+  | Annotated
+    { expression : Expression
+    , annotation : Type
+    }
 
 
 {-|
