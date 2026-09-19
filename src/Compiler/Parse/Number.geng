@@ -1,12 +1,10 @@
 module Compiler.Parse.Number exposing
     ( Outcome (..)
-    , Suffix (..)
     , Error (..)
     , parser
     , zeroOrHigher
     , hexParser
     , hexDigits
-    , suffixToString
     , errorToString
     )
 
@@ -14,10 +12,6 @@ module Compiler.Parse.Number exposing
 {-| This module provides parsers for Gren numeric literals.
 
 @docs parser, Outcome, Error, errorToString
-
-## Suffixes
-
-@docs Suffix, suffixToString
 
 ## Specialized parsers
 
@@ -44,76 +38,25 @@ says about width. A caller that needs a small number -- an operator's
 precedence, a unicode escape -- reads it back with `String.toInt`.
 -}
 type Outcome
-    = Integer { text : String, suffix : Maybe Suffix }
-    | FloatingPoint { val : Float, text : String, suffix : Maybe Suffix }
-    | Hex { text : String, suffix : Maybe Suffix }
-
-
-{-| The type a literal's suffix names (`docs/syntax.md` S5, D154).
-
-`42i64`, `42u32`, `42u64` and `1.5f32` are D2's four spellings, `42i8`,
-`42u8`, `42i16` and `42u16` are D342's, and the suffix is a **type ascription
-written on the literal**: it says which of the sized types the literal has, and it is accepted wherever the corresponding annotation would be.
-This parser does not type-check, so it accepts every suffix on every numeric
-literal and lets the frontend say that `1.5i64` is a mismatch -- which is what
-keeps D86's two grammars the same grammar.
-
-`Int` and `Float` have no suffix: S5 says their literals stay bare, so there is
-no `i32` and no `f64`.
-
-**There is no `f32` on a hex literal**, and no rule here says so: `f`, `3` and
-`2` are all hex digits, so [hexDigits](#hexDigits) has already eaten them and
-`0xFFf32` is the number `0xFFF32`. The Haskell parser reaches the same answer by
-a different road, which is the road D86 cares about.
--}
-type Suffix
-    = I64
-    | U32
-    | U64
-    | F32
-    | I8
-    | U8
-    | I16
-    | U16
-
-
-{-| The suffix as it is written, without the number in front of it.
--}
-suffixToString : Suffix -> String
-suffixToString suffix =
-    when suffix is
-        I64 ->
-            "i64"
-
-        U32 ->
-            "u32"
-
-        U64 ->
-            "u64"
-
-        F32 ->
-            "f32"
-
-        I8 ->
-            "i8"
-
-        U8 ->
-            "u8"
-
-        I16 ->
-            "i16"
-
-        U16 ->
-            "u16"
+    = Integer { text : String }
+    | FloatingPoint { val : Float, text : String }
+    | Hex { text : String }
 
 
 {-| The kind of errors that can happen while parsing numbers.
+
+`RetiredSuffix` is `42i64`, a suffix D359 retired for `(42 : Int64)`
+(`docs/expr-annotation.md` §EA12), and it carries that annotation, written with
+the digits as they were. A letter after the digits was always refused, so the
+suffix needs no rule to be an error; it is recognized only so that the error
+can say what to write instead, as the Haskell parser's does.
 -}
 type Error
     = NotANumber
     | LeadingZero
     | ExpectedInt
     | ExpectedHex
+    | RetiredSuffix { annotation : String }
 
 
 {-| Returns a human-readable description of an `Error`.
@@ -132,6 +75,9 @@ errorToString error =
         
         ExpectedHex ->
             "Expected hexadecimal digits"
+
+        RetiredSuffix { annotation } ->
+            "A number does not say its type with a suffix any more; write " ++ annotation
 
 
 {-| Use this to parse numeric literals.
@@ -171,63 +117,68 @@ zeroOrHigher =
     numberBody
         |> Parser.andThen
             (\outcome ->
-                Parser.map (\suffix -> withSuffix suffix outcome) suffixParser
-            )
-        |> Parser.andThen
-            (\successCase ->
                 -- What the Haskell parser's `isDirtyEnd` refuses: a letter, a
-                -- digit or an underscore. A digit cannot follow the digits
-                -- themselves, but it can follow a suffix, and without it
-                -- `42i640` read as `42i64 0` (docs/m1b-narrow-int.md §NI2.5).
-                -- It is here rather than in `parser` so that a pattern, which
-                -- reads a number through this one, is held to it as well.
+                -- digit or an underscore. It is here rather than in `parser`
+                -- so that a pattern, which reads a number through this one, is
+                -- held to it as well. A retired suffix is tried first, so its
+                -- error can name the annotation, and a digit after one is the
+                -- plain refusal, since `42i640` was never a suffix
+                -- (docs/m1b-narrow-int.md §NI2.5).
                 Parser.oneOf
-                    [ Parser.chompIf isDirtyEnd NotANumber
+                    [ retiredSuffix
+                        |> Parser.andThen
+                            (\tipe ->
+                                -- Decided by what follows rather than by a
+                                -- second `oneOf`, whose failed branch would be
+                                -- the first dead end reported.
+                                Parser.chompWhile isDirtyEnd
+                                    |> Parser.getChompedString
+                                    |> Parser.andThen
+                                        (\after ->
+                                            if String.isEmpty after then
+                                                Parser.problem (RetiredSuffix { annotation = "(" ++ textOf outcome ++ " : " ++ tipe ++ ")" })
+
+                                            else
+                                                Parser.problem NotANumber
+                                        )
+                            )
+                    , Parser.chompIf isDirtyEnd NotANumber
                         |> Parser.andThen (\_ -> Parser.problem NotANumber)
-                    , Parser.succeed successCase
+                    , Parser.succeed outcome
                     ]
             )
 
 
-{-| An optional suffix, read after the digits and before the guard in
-[zeroOrHigher](#zeroOrHigher) that nothing a name could be made of may follow a
-number -- which is what makes `42i64` one token and `42abc` and `42i640` still
-errors.
+{-| The eight suffixes D359 retired, each answering the type it named. There is
+no `f32` on a hex literal: `f`, `3` and `2` are hex digits, so
+[hexDigits](#hexDigits) has already eaten them and `0xFFf32` is the number
+`0xFFF32`.
 -}
-suffixParser : Parser Context Error (Maybe Suffix)
-suffixParser =
+retiredSuffix : Parser Context Error String
+retiredSuffix =
     Parser.oneOf
-        [ Parser.token "i64" NotANumber
-            |> Parser.map (\_ -> Just I64)
-        , Parser.token "u32" NotANumber
-            |> Parser.map (\_ -> Just U32)
-        , Parser.token "u64" NotANumber
-            |> Parser.map (\_ -> Just U64)
-        , Parser.token "f32" NotANumber
-            |> Parser.map (\_ -> Just F32)
-        , Parser.token "i16" NotANumber
-            |> Parser.map (\_ -> Just I16)
-        , Parser.token "u16" NotANumber
-            |> Parser.map (\_ -> Just U16)
-        , Parser.token "i8" NotANumber
-            |> Parser.map (\_ -> Just I8)
-        , Parser.token "u8" NotANumber
-            |> Parser.map (\_ -> Just U8)
-        , Parser.succeed Nothing
+        [ Parser.token "i64" NotANumber |> Parser.map (\_ -> "Int64")
+        , Parser.token "u32" NotANumber |> Parser.map (\_ -> "UInt32")
+        , Parser.token "u64" NotANumber |> Parser.map (\_ -> "UInt64")
+        , Parser.token "f32" NotANumber |> Parser.map (\_ -> "Float32")
+        , Parser.token "i16" NotANumber |> Parser.map (\_ -> "Int16")
+        , Parser.token "u16" NotANumber |> Parser.map (\_ -> "UInt16")
+        , Parser.token "i8" NotANumber |> Parser.map (\_ -> "Int8")
+        , Parser.token "u8" NotANumber |> Parser.map (\_ -> "UInt8")
         ]
 
 
-withSuffix : Maybe Suffix -> Outcome -> Outcome
-withSuffix suffix outcome =
+textOf : Outcome -> String
+textOf outcome =
     when outcome is
-        Integer record ->
-            Integer { record | suffix = suffix }
+        Integer { text } ->
+            text
 
-        FloatingPoint record ->
-            FloatingPoint { record | suffix = suffix }
+        FloatingPoint { text } ->
+            text
 
-        Hex record ->
-            Hex { record | suffix = suffix }
+        Hex { text } ->
+            text
 
 
 numberBody : Parser Context Error Outcome
@@ -239,13 +190,13 @@ numberBody =
                     Parser.oneOf
                         [ Parser.chompChar 'x' NotANumber
                             |> Parser.andThen (\_ -> hexDigits ExpectedHex)
-                            |> Parser.map (\digits -> Hex { text = "0x" ++ digits, suffix = Nothing })
+                            |> Parser.map (\digits -> Hex { text = "0x" ++ digits })
                         , Parser.chompChar '.' NotANumber
                             |> Parser.andThen (\_ -> fractalParser "0")
                         , exponentParser "0"
                         , Parser.chompIf Char.isDigit NotANumber
                             |> Parser.andThen (\_ -> Parser.problem LeadingZero)
-                        , Parser.succeed (Integer { text = "0", suffix = Nothing })
+                        , Parser.succeed (Integer { text = "0" })
                         ]
                 )
         , Parser.chompIf Char.isDigit NotANumber
@@ -257,7 +208,7 @@ numberBody =
                         [ Parser.chompChar '.' NotANumber
                             |> Parser.andThen (\_ -> fractalParser str)
                         , exponentParser str
-                        , Parser.succeed (Integer { text = str, suffix = Nothing })
+                        , Parser.succeed (Integer { text = str })
                         ]
                 )
         ]
@@ -280,7 +231,7 @@ fractalParser str =
                             Parser.problem NotANumber
 
                         Just float ->
-                            Parser.succeed (FloatingPoint { val = float, text = base, suffix = Nothing })
+                            Parser.succeed (FloatingPoint { val = float, text = base })
                     ]
             )
 
@@ -313,7 +264,7 @@ exponentParser base =
                                             Parser.problem NotANumber
 
                                         Just float ->
-                                            Parser.succeed (FloatingPoint { val = float, text = fullText, suffix = Nothing })
+                                            Parser.succeed (FloatingPoint { val = float, text = fullText })
                                 )
                     )
             )

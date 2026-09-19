@@ -18,22 +18,22 @@ tests =
         [ describe "Primitives"
             [ test "Int" <| \_ ->
                 Run.run PE.parser Context.empty "5"
-                    |> expectExpression (AST.NumberLiteral (Number.Integer { text = "5", suffix = Nothing }))
+                    |> expectExpression (AST.NumberLiteral (Number.Integer { text = "5" }))
             , test "Negative Int" <| \_ ->
                 Run.run PE.parser Context.empty "-15"
                     |> expectExpression
                         (AST.Negate
                             { start = { row = 1, col = 2 }
                             , end = { row = 1, col = 4 }
-                            , value = AST.NumberLiteral (Number.Integer { text = "15", suffix = Nothing })
+                            , value = AST.NumberLiteral (Number.Integer { text = "15" })
                             }
                         )
             , test "Float" <| \_ ->
                 Run.run PE.parser Context.empty "3.14"
-                    |> expectExpression (AST.NumberLiteral (Number.FloatingPoint { val = 3.14, text = "3.14", suffix = Nothing }))
+                    |> expectExpression (AST.NumberLiteral (Number.FloatingPoint { val = 3.14, text = "3.14" }))
             , test "Hex" <| \_ ->
                 Run.run PE.parser Context.empty "0xDE"
-                    |> expectExpression (AST.NumberLiteral (Number.Hex { text = "0xDE", suffix = Nothing }))
+                    |> expectExpression (AST.NumberLiteral (Number.Hex { text = "0xDE" }))
             , test "Char" <| \_ ->
                 Run.run PE.parser Context.empty "'z'"
                     |> expectExpression (AST.CharLiteral 'z')
@@ -127,7 +127,7 @@ tests =
                                                     SourcePosition.at
                                                         { row = 1, col = 7 }
                                                         { row = 1, col = 8 }
-                                                        (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                                        (AST.NumberLiteral (Number.Integer { text = "1" }))
                                               }
                                             ]
                                         )
@@ -287,7 +287,7 @@ tests =
                                                         SourcePosition.at
                                                             { row = 1, col = 20 }
                                                             { row = 1, col = 21 }
-                                                            (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                                            (AST.NumberLiteral (Number.Integer { text = "1" }))
                                                     }
                                                 )
                                         }
@@ -358,11 +358,11 @@ tests =
                                             [ SourcePosition.at
                                                 { row = 1, col = 8 }
                                                 { row = 1, col = 9 }
-                                                (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                                (AST.NumberLiteral (Number.Integer { text = "1" }))
                                             , SourcePosition.at
                                                 { row = 1, col = 10 }
                                                 { row = 1, col = 11 }
-                                                (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
+                                                (AST.NumberLiteral (Number.Integer { text = "2" }))
                                             ]
                                         }
                                     )
@@ -386,7 +386,7 @@ tests =
                                                   SourcePosition.at
                                                       { row = 3, col = 5 }
                                                       { row = 3, col = 6 }
-                                                      (AST.PInt { isHex = False, text = "1", suffix = Nothing })
+                                                      (AST.PInt { isHex = False, text = "1" })
                                               , body =
                                                   SourcePosition.at
                                                       { row = 3, col = 10 }
@@ -790,15 +790,15 @@ tests =
                                     (AST.ArrayLiteral
                                         [ { start = { row = 1, col = 3 }
                                           , end = { row = 1, col = 4 }
-                                          , value = AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing })
+                                          , value = AST.NumberLiteral (Number.Integer { text = "1" })
                                           }
                                         , { start = { row = 1, col = 6 }
                                           , end = { row = 1, col = 7 }
-                                          , value = AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing })
+                                          , value = AST.NumberLiteral (Number.Integer { text = "2" })
                                           }
                                         , { start = { row = 1, col = 9 }
                                           , end = { row = 1, col = 10 }
-                                          , value = AST.NumberLiteral (Number.Integer { text = "3", suffix = Nothing })
+                                          , value = AST.NumberLiteral (Number.Integer { text = "3" })
                                           }
                                         ]
                                     )
@@ -887,7 +887,7 @@ tests =
                         (AST.ArrayLiteral
                             [ { start = { row = 1, col = 3 }
                               , end = { row = 1, col = 4 }
-                              , value = AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing })
+                              , value = AST.NumberLiteral (Number.Integer { text = "1" })
                               }
                             ]
                         )
@@ -915,7 +915,7 @@ tests =
                         (AST.ArrayLiteral
                             [ { start = { row = 1, col = 3 }
                               , end = { row = 1, col = 4 }
-                              , value = AST.NumberLiteral (Number.Integer { text = "0", suffix = Nothing })
+                              , value = AST.NumberLiteral (Number.Integer { text = "0" })
                               }
                             , { start = { row = 1, col = 6 }
                               , end = { row = 1, col = 27 }
@@ -931,14 +931,14 @@ tests =
                                                 SourcePosition.at
                                                     { row = 1, col = 19 }
                                                     { row = 1, col = 20 }
-                                                    (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                                    (AST.NumberLiteral (Number.Integer { text = "1" }))
                                               }
                                             ]
                                         , elseBranch =
                                             SourcePosition.at
                                                 { row = 1, col = 26 }
                                                 { row = 1, col = 27 }
-                                                (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
+                                                (AST.NumberLiteral (Number.Integer { text = "2" }))
                                         }
                                     )
                               }
@@ -956,7 +956,7 @@ tests =
                                             SourcePosition.at
                                                 { row = 1, col = 3 }
                                                 { row = 1, col = 4 }
-                                                (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                                (AST.NumberLiteral (Number.Integer { text = "1" }))
                                         , operator =
                                             SourcePosition.at
                                                 { row = 1, col = 5 }
@@ -966,7 +966,7 @@ tests =
                                             SourcePosition.at
                                                 { row = 1, col = 7 }
                                                 { row = 1, col = 8 }
-                                                (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
+                                                (AST.NumberLiteral (Number.Integer { text = "2" }))
                                         }
                                     )
                               }
@@ -978,7 +978,7 @@ tests =
                                             SourcePosition.at
                                                 { row = 1, col = 10 }
                                                 { row = 1, col = 11 }
-                                                (AST.NumberLiteral (Number.Integer { text = "3", suffix = Nothing }))
+                                                (AST.NumberLiteral (Number.Integer { text = "3" }))
                                         , operator =
                                             SourcePosition.at
                                                 { row = 1, col = 12 }
@@ -1015,7 +1015,7 @@ tests =
                                     SourcePosition.at
                                         { row = 1, col = 12 }
                                         { row = 1, col = 13 }
-                                        (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                        (AST.NumberLiteral (Number.Integer { text = "1" }))
                               }
                             ]
                         )
@@ -1032,7 +1032,7 @@ tests =
                                     SourcePosition.at
                                         { row = 1, col = 12 }
                                         { row = 1, col = 13 }
-                                        (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                        (AST.NumberLiteral (Number.Integer { text = "1" }))
                               }
                             , { field =
                                     SourcePosition.at
@@ -1043,7 +1043,7 @@ tests =
                                     SourcePosition.at
                                         { row = 1, col = 24 }
                                         { row = 1, col = 26 }
-                                        (AST.NumberLiteral (Number.Integer { text = "10", suffix = Nothing }))
+                                        (AST.NumberLiteral (Number.Integer { text = "10" }))
                               }
                             ]
                         )
@@ -1071,14 +1071,14 @@ tests =
                                                         SourcePosition.at
                                                             { row = 1, col = 25 }
                                                             { row = 1, col = 26 }
-                                                            (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                                            (AST.NumberLiteral (Number.Integer { text = "1" }))
                                                       }
                                                     ]
                                                 , elseBranch =
                                                     SourcePosition.at
                                                         { row = 1, col = 32 }
                                                         { row = 1, col = 33 }
-                                                        (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
+                                                        (AST.NumberLiteral (Number.Integer { text = "2" }))
                                                 }
                                             )
                                   }
@@ -1102,7 +1102,7 @@ tests =
                                                     SourcePosition.at
                                                         { row = 1, col = 12 }
                                                         { row = 1, col = 13 }
-                                                        (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                                        (AST.NumberLiteral (Number.Integer { text = "1" }))
                                                 , operator =
                                                     SourcePosition.at
                                                         { row = 1, col = 14 }
@@ -1112,7 +1112,7 @@ tests =
                                                     SourcePosition.at
                                                         { row = 1, col = 16 }
                                                         { row = 1, col = 17 }
-                                                        (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
+                                                        (AST.NumberLiteral (Number.Integer { text = "2" }))
                                                 }
                                             )
                                   }
@@ -1130,7 +1130,7 @@ tests =
                                                     SourcePosition.at
                                                         { row = 1, col = 28 }
                                                         { row = 1, col = 29 }
-                                                        (AST.NumberLiteral (Number.Integer { text = "3", suffix = Nothing }))
+                                                        (AST.NumberLiteral (Number.Integer { text = "3" }))
                                                 , operator =
                                                     SourcePosition.at
                                                         { row = 1, col = 30 }
@@ -1165,7 +1165,7 @@ tests =
                                         SourcePosition.at
                                             { row = 1, col = 18 }
                                             { row = 1, col = 19 }
-                                            (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                            (AST.NumberLiteral (Number.Integer { text = "1" }))
                                   }
                                 , { field =
                                         SourcePosition.at
@@ -1176,7 +1176,7 @@ tests =
                                         SourcePosition.at
                                             { row = 1, col = 30 }
                                             { row = 1, col = 32 }
-                                            (AST.NumberLiteral (Number.Integer { text = "10", suffix = Nothing }))
+                                            (AST.NumberLiteral (Number.Integer { text = "10" }))
                                   }
                                 ]
                             }
@@ -1197,14 +1197,14 @@ tests =
                                         SourcePosition.at
                                             { row = 1, col = 14 }
                                             { row = 1, col = 15 }
-                                            (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                            (AST.NumberLiteral (Number.Integer { text = "1" }))
                                       }
                                     ]
                                 , elseBranch =
                                     SourcePosition.at
                                         { row = 1, col = 21 }
                                         { row = 1, col = 22 }
-                                        (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
+                                        (AST.NumberLiteral (Number.Integer { text = "2" }))
                                 }
                             )
                 ]
@@ -1636,7 +1636,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 4, col = 18 }
                                                                 { row = 4, col = 19 }
-                                                                (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                                                (AST.NumberLiteral (Number.Integer { text = "1" }))
                                                         }
                                                       , { pattern =
                                                             SourcePosition.at
@@ -1655,7 +1655,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 5, col = 18 }
                                                                 { row = 5, col = 19 }
-                                                                (AST.NumberLiteral (Number.Integer { text = "2", suffix = Nothing }))
+                                                                (AST.NumberLiteral (Number.Integer { text = "2" }))
                                                         }
                                                       ]
                                                   }
@@ -1678,7 +1678,7 @@ tests =
                                           SourcePosition.at
                                               { row = 6, col = 10 }
                                               { row = 6, col = 11 }
-                                              (AST.NumberLiteral (Number.Integer { text = "3", suffix = Nothing }))
+                                              (AST.NumberLiteral (Number.Integer { text = "3" }))
                                       }
                                     ]
                                 }
@@ -1712,7 +1712,7 @@ tests =
                                                 SourcePosition.at
                                                     { row = 3, col = 9 }
                                                     { row = 3, col = 10 }
-                                                    (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                                    (AST.NumberLiteral (Number.Integer { text = "1" }))
                                             }
                                         )
                                     ]
@@ -1753,7 +1753,7 @@ tests =
                                                 SourcePosition.at
                                                     { row = 3, col = 9 }
                                                     { row = 3, col = 10 }
-                                                    (AST.NumberLiteral (Number.Integer { text = "5", suffix = Nothing }))
+                                                    (AST.NumberLiteral (Number.Integer { text = "5" }))
                                             }
                                         )
                                     , SourcePosition.at
@@ -1831,7 +1831,7 @@ tests =
                                                 SourcePosition.at
                                                     { row = 4, col = 9 }
                                                     { row = 4, col = 10 }
-                                                    (AST.NumberLiteral (Number.Integer { text = "1", suffix = Nothing }))
+                                                    (AST.NumberLiteral (Number.Integer { text = "1" }))
                                             }
                                         )
                                     ]
@@ -1886,7 +1886,7 @@ tests =
                                                               SourcePosition.at
                                                                   { row = 3, col = 15 }
                                                                   { row = 3, col = 16 }
-                                                                  (AST.NumberLiteral (Number.Integer { text = "5", suffix = Nothing }))
+                                                                  (AST.NumberLiteral (Number.Integer { text = "5" }))
                                                           }
                                                         ]
                                                     )
@@ -1960,7 +1960,7 @@ tests =
                                         SourcePosition.at
                                             { row = 1, col = 2 }
                                             { row = 1, col = 3 }
-                                            (AST.NumberLiteral (Number.Integer { text = "5", suffix = Nothing }))
+                                            (AST.NumberLiteral (Number.Integer { text = "5" }))
                                     , annotation =
                                         SourcePosition.at
                                             { row = 1, col = 6 }

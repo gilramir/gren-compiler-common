@@ -435,7 +435,7 @@ tests =
                                       SourcePosition.at
                                           { row = 4, col = 7 }
                                           { row = 4, col = 9 }
-                                          (AST.NumberLiteral (Number.Integer { text = "25", suffix = Nothing }))
+                                          (AST.NumberLiteral (Number.Integer { text = "25" }))
                                   }
                              }
                           ]
@@ -650,7 +650,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 6, col = 9 }
                                                                 { row = 6, col = 10 }
-                                                                (AST.PInt { isHex = False, text = "0", suffix = Nothing })
+                                                                (AST.PInt { isHex = False, text = "0" })
                                                         , body =
                                                             SourcePosition.at
                                                                 { row = 6, col = 14 }
@@ -661,7 +661,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 7, col = 9 }
                                                                 { row = 7, col = 10 }
-                                                                (AST.PInt { isHex = False, text = "1", suffix = Nothing })
+                                                                (AST.PInt { isHex = False, text = "1" })
                                                         , body =
                                                             SourcePosition.at
                                                                 { row = 7, col = 14 }

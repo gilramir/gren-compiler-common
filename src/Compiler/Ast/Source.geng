@@ -199,7 +199,6 @@ type Pattern_
   | PInt
     { text : String
     , isHex : Bool
-    , suffix : Maybe Number.Suffix
     }
 
 

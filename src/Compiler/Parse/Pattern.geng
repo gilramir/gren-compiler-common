@@ -331,10 +331,10 @@ numberBy numParser =
             (\num ->
                 when num is
                     Number.Integer lit ->
-                        Parser.succeed <| AST.PInt { isHex = False, text = lit.text, suffix = lit.suffix }
+                        Parser.succeed <| AST.PInt { isHex = False, text = lit.text }
 
                     Number.Hex lit ->
-                        Parser.succeed <| AST.PInt { isHex = True, text = lit.text, suffix = lit.suffix }
+                        Parser.succeed <| AST.PInt { isHex = True, text = lit.text }
 
                     Number.FloatingPoint _ ->
                         Parser.problem FloatNotSupported

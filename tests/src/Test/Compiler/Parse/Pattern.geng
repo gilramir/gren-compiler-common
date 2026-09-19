@@ -126,14 +126,14 @@ tests =
         , test "ints" <| \_ ->
             Run.run PT.parser Context.empty "160"
                 |> expectPattern
-                    (AST.PInt { isHex = False, text = "160", suffix = Nothing })
+                    (AST.PInt { isHex = False, text = "160" })
         , test "a negative int is refused, as the Haskell parser refuses it (D86; m1b-int.md I20)" <| \_ ->
             Run.run PT.parser Context.empty "(-10)"
                 |> Expect.err
         , test "ints (hex)" <| \_ ->
             Run.run PT.parser Context.empty "0xAB"
                 |> expectPattern
-                    (AST.PInt { isHex = True, text = "0xAB", suffix = Nothing })
+                    (AST.PInt { isHex = True, text = "0xAB" })
         , test "string" <| \_ ->
             Run.run PT.parser Context.empty "\"some String\""
                 |> expectPattern
@@ -157,7 +157,7 @@ tests =
                         , SourcePosition.at
                             { row = 1, col = 6 }
                             { row = 1, col = 7 }
-                            (AST.PInt { isHex = False, text = "2", suffix = Nothing })
+                            (AST.PInt { isHex = False, text = "2" })
                         , SourcePosition.at
                             { row = 1, col = 9 }
                             { row = 1, col = 10 }
@@ -189,7 +189,7 @@ tests =
                                         SourcePosition.at
                                             { row = 1, col = 17 }
                                             { row = 1, col = 18 }
-                                            (AST.PInt { isHex = False, text = "1", suffix = Nothing })
+                                            (AST.PInt { isHex = False, text = "1" })
                                 , name =
                                     SourcePosition.at
                                         { row = 1, col = 12 }
@@ -217,7 +217,7 @@ tests =
                                    SourcePosition.at
                                        { row = 1, col = 7 }
                                        { row = 1, col = 8 }
-                                       (AST.PInt { isHex = False, text = "1", suffix = Nothing })
+                                       (AST.PInt { isHex = False, text = "1" })
                            }
                         , { field =
                                SourcePosition.at
@@ -273,7 +273,7 @@ tests =
                                                     SourcePosition.at
                                                         { row = 1, col = 25 }
                                                         { row = 1, col = 26 }
-                                                        (AST.PInt { isHex = False, text = "1", suffix = Nothing })
+                                                        (AST.PInt { isHex = False, text = "1" })
                                             , name =
                                                 SourcePosition.at
                                                     { row = 1, col = 20 }
@@ -353,7 +353,7 @@ tests =
                                                    SourcePosition.at
                                                        { row = 1, col = 17 }
                                                        { row = 1, col = 18 }
-                                                       (AST.PInt { isHex = False, text = "1", suffix = Nothing })
+                                                       (AST.PInt { isHex = False, text = "1" })
                                            }
                                         ]
                                     )

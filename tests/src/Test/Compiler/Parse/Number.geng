@@ -15,7 +15,7 @@ tests =
         [ describe "Integers"
             [ fuzz Fuzz.int "Can parse regular integers" <| \int ->
                 run (String.fromInt int)
-                    |> Expect.equal (Ok (PN.Integer { text = String.fromInt int, suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.Integer { text = String.fromInt int }))
             , test "empty string fails" <| \{} ->
                 run ""
                     |> expectErr PN.NotANumber
@@ -36,12 +36,12 @@ tests =
                         (\outcome ->
                             when outcome is
                                 PN.Integer { text } ->
-                                    PN.FloatingPoint { val = String.toFloat text |> Maybe.withDefault -1, text = text, suffix = Nothing }
+                                    PN.FloatingPoint { val = String.toFloat text |> Maybe.withDefault -1, text = text }
 
                                 _ ->
                                     outcome
                         )
-                    |> Expect.equal (Ok (PN.FloatingPoint { val = float, text = String.fromFloat float, suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = float, text = String.fromFloat float }))
             , test "Requires a number after ." <| \{} ->
                 run "0."
                     |> expectErr PN.ExpectedInt
@@ -52,25 +52,25 @@ tests =
         , describe "Scientific notation"
             [ test "integer with exponent" <| \{} ->
                 run "1e5"
-                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.0e5, text = "1e5", suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.0e5, text = "1e5" }))
             , test "zero with exponent" <| \{} ->
                 run "0e3"
-                    |> Expect.equal (Ok (PN.FloatingPoint { val = 0.0e3, text = "0e3", suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 0.0e3, text = "0e3" }))
             , test "decimal with exponent" <| \{} ->
                 run "1.5e3"
-                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e3, text = "1.5e3", suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e3, text = "1.5e3" }))
             , test "uppercase E" <| \{} ->
                 run "1.5E3"
-                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e3, text = "1.5E3", suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e3, text = "1.5E3" }))
             , test "explicit positive exponent" <| \{} ->
                 run "1.5e+3"
-                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e3, text = "1.5e+3", suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e3, text = "1.5e+3" }))
             , test "negative exponent" <| \{} ->
                 run "1.5e-3"
-                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e-3, text = "1.5e-3", suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5e-3, text = "1.5e-3" }))
             , test "negative number with exponent" <| \{} ->
                 run "-1.5e3"
-                    |> Expect.equal (Ok (PN.FloatingPoint { val = -1.5e3, text = "-1.5e3", suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.FloatingPoint { val = -1.5e3, text = "-1.5e3" }))
             , test "requires digits after e" <| \{} ->
                 run "1e"
                     |> expectErr PN.ExpectedInt
@@ -81,7 +81,7 @@ tests =
         , describe "Hex"
             [ test "Can parse hex" <| \{} ->
                 run "0xAFFE"
-                    |> Expect.equal (Ok (PN.Hex { text = "0xAFFE", suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.Hex { text = "0xAFFE" }))
             , test "Requires a hex digit after 0x" <| \{} ->
                 run "0x"
                     |> expectErr PN.ExpectedHex
@@ -90,7 +90,7 @@ tests =
                     |> expectErr PN.NotANumber
             , test "a hex literal is its text, sign included" <| \{} ->
                 run "-0x1FFFFFFFFFFFCA"
-                    |> Expect.equal (Ok (PN.Hex { text = "-0x1FFFFFFFFFFFCA", suffix = Nothing }))
+                    |> Expect.equal (Ok (PN.Hex { text = "-0x1FFFFFFFFFFFCA" }))
             , describe "hexParser"
                 -- A hex *literal* comes back as text (D149's reason), and the
                 -- number is the frontend's to make. `hexParser` still folds the
@@ -102,52 +102,43 @@ tests =
                 , hex "10FFFF" 1114111
                 ]
             ]
-        , describe "Suffixes"
-            -- docs/syntax.md S5, D154; the narrow four are D342's (D348).
-            [ suffixed "42i64" "42" PN.I64
-            , suffixed "42u32" "42" PN.U32
-            , suffixed "42u64" "42" PN.U64
-            , suffixed "42i8" "42" PN.I8
-            , suffixed "42u8" "42" PN.U8
-            , suffixed "42i16" "42" PN.I16
-            , suffixed "42u16" "42" PN.U16
-            , test "a float with f32" <| \{} ->
-                run "1.5f32"
-                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5, text = "1.5", suffix = Just PN.F32 }))
-            , test "a negative literal keeps its suffix" <| \{} ->
-                run "-7i8"
-                    |> Expect.equal (Ok (PN.Integer { text = "-7", suffix = Just PN.I8 }))
-            , test "every suffix on every literal; the frontend refuses 1.5i64" <| \{} ->
-                run "1.5i64"
-                    |> Expect.equal (Ok (PN.FloatingPoint { val = 1.5, text = "1.5", suffix = Just PN.I64 }))
-            , test "a hex literal takes an integer suffix" <| \{} ->
-                run "0xFFu8"
-                    |> Expect.equal (Ok (PN.Hex { text = "0xFF", suffix = Just PN.U8 }))
+        , describe "Retired suffixes"
+            -- D359 (docs/expr-annotation.md §EA12): a suffix is refused, and
+            -- the error carries the annotation to write instead.
+            [ retired "42i64" "(42 : Int64)"
+            , retired "42u32" "(42 : UInt32)"
+            , retired "42u64" "(42 : UInt64)"
+            , retired "42i8" "(42 : Int8)"
+            , retired "42u8" "(42 : UInt8)"
+            , retired "42i16" "(42 : Int16)"
+            , retired "42u16" "(42 : UInt16)"
+            , retired "1.5f32" "(1.5 : Float32)"
+            , retired "1.5e10f32" "(1.5e10 : Float32)"
+            , retired "0xFFu8" "(0xFF : UInt8)"
+            -- The sign is added after the digits are read, so the hint names
+            -- the magnitude; -(7 : Int8) is (-7 : Int8) (D358).
+            , retired "-7i8" "(7 : Int8)"
             , test "f32 on hex is three more hex digits" <| \{} ->
                 run "0xFFf32"
-                    |> Expect.equal (Ok (PN.Hex { text = "0xFFf32", suffix = Nothing }))
-            , test "a digit after a suffix is refused, not read as a second number (m1b-narrow-int.md NI2.5)" <| \{} ->
+                    |> Expect.equal (Ok (PN.Hex { text = "0xFFf32" }))
+            , test "a digit after a suffix is the plain refusal, since that was never a suffix (m1b-narrow-int.md NI2.5)" <| \{} ->
                 run "42i640"
                     |> expectErr PN.NotANumber
-            , test "an unknown suffix is refused" <| \{} ->
+            , test "a suffix that was never one of the eight is the plain refusal" <| \{} ->
                 run "42i32"
                     |> expectErr PN.NotANumber
             , test "an underscore after a number is refused" <| \{} ->
                 run "42_"
                     |> expectErr PN.NotANumber
-            , test "suffixToString writes the suffix as it is written" <| \{} ->
-                [ PN.I64, PN.U32, PN.U64, PN.F32, PN.I8, PN.U8, PN.I16, PN.U16 ]
-                    |> Array.map PN.suffixToString
-                    |> Expect.equal [ "i64", "u32", "u64", "f32", "i8", "u8", "i16", "u16" ]
             ]
         ]
 
 
-suffixed : String -> String -> PN.Suffix -> Test
-suffixed source text suffix =
-    test ("reads " ++ source) <| \{} ->
+retired : String -> String -> Test
+retired source annotation =
+    test ("refuses " ++ source ++ ", naming " ++ annotation) <| \{} ->
         run source
-            |> Expect.equal (Ok (PN.Integer { text = text, suffix = Just suffix }))
+            |> expectErr (PN.RetiredSuffix { annotation = annotation })
 
 
 hex : String -> Int -> Test
