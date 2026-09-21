@@ -24,8 +24,9 @@ module Compiler.Runtime exposing
 A package declares the most general runtime it works on, and a build is
 compatible with it when the build's runtime is at or below that one. The
 compiler builds for `any`, `browser` and `node`, which are the three
-[Platform](Compiler.Platform#Platform)s, and a package may declare any of the
-nine.
+[Platform](Compiler.Platform#Platform)s, and for `beam` since D405 (geng-lang
+`m2-interop.md` §EI10), which the backend is told as `node`. A package may
+declare any of the nine.
 
 @docs Runtime, parent, isAtOrBelow
 
@@ -133,6 +134,14 @@ fromPlatform platform =
 
 
 {-| The platform the compiler builds a runtime as, if it builds for it.
+
+`beam` is built as `node` (D405). In the backend a platform decides one thing
+outside JavaScript's output, which `main` it accepts, and `node`'s is D72's
+`Task Never {}`, which is a BEAM program's `main` too; `common` accepts none.
+Nothing of Node's reaches a `beam` build through it: the target gate (D320)
+and `compiler-node`'s `Compiler.Outline.runtimesFor` keep the `node`
+package out. The one place the substitution shows is the wire's
+`Program.runtime`, which says `node` for a `beam` build, and nothing reads it.
 -}
 toPlatform : Runtime -> Maybe Platform
 toPlatform runtime =
@@ -140,6 +149,7 @@ toPlatform runtime =
         Any -> Just Platform.Common
         Browser -> Just Platform.Browser
         Node -> Just Platform.Node
+        Beam -> Just Platform.Node
         _ -> Nothing
 
 
