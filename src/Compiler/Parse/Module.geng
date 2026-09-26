@@ -1,6 +1,7 @@
 module Compiler.Parse.Module exposing
     ( Error (..)
     , parser
+    , headerParser
     , errorToString
     , errorsToString
     )
@@ -8,7 +9,7 @@ module Compiler.Parse.Module exposing
 
 {-| This will let you parse entire modules of Gren code.
 
-@docs parser, Error, errorToString, errorsToString
+@docs parser, headerParser, Error, errorToString, errorsToString
 -}
 
 
@@ -79,6 +80,29 @@ errorToString error =
 spaceParser : Parser Context Error {}
 spaceParser =
     Parser.mapError SpaceError Space.parser
+
+
+{-| A module's header alone: its name and what it exposes, read without the
+rest of the module, for a tool that only asks which modules expose a name
+(geng-lang `m2-beam-toptier.md` §TT33, where `geng test` finds the modules that
+expose `tests`). It stops after the `exposing` list and asks nothing of what
+follows it.
+-}
+headerParser : Parser Context Error { name : SourcePosition.Located String, exports : AST.Exposing }
+headerParser =
+    Parser.succeed (\name exports -> { name = name, exports = exports })
+        |> Parser.skip
+            (Parser.oneOf
+                [ removedHeaderParser "port"
+                , removedHeaderParser "effect"
+                , Parser.succeed {}
+                ]
+            )
+        |> Parser.skip (Variable.keyword "module" (ExpectedKeyword "module"))
+        |> Parser.skip spaceParser
+        |> Parser.keep moduleNameParser
+        |> Parser.skip spaceParser
+        |> Parser.keep parseExposingStatement
 
 
 {-| Use this to parse an entire module (file) of Gren code.
