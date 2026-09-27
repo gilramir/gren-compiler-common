@@ -8,6 +8,8 @@ module Compiler.Runtime exposing
     , fromPlatform
     , toPlatform
     , isBuilt
+    , built
+    , builtNames
     )
 
 
@@ -32,7 +34,7 @@ declare any of the nine.
 
 ## Value conversion
 
-@docs toString, fromString, fromPlatform, toPlatform, isBuilt
+@docs toString, fromString, fromPlatform, toPlatform, isBuilt, built, builtNames
 -}
 
 import Compiler.Platform as Platform exposing (Platform)
@@ -135,13 +137,18 @@ fromPlatform platform =
 
 {-| The platform the compiler builds a runtime as, if it builds for it.
 
-`beam` is built as `node` (D405). In the backend a platform decides one thing
-outside JavaScript's output, which `main` it accepts, and `node`'s is D72's
-`Task Never {}`, which is a BEAM program's `main` too; `common` accepts none.
-Nothing of Node's reaches a `beam` build through it: the target gate (D320)
-and `compiler-node`'s `Compiler.Outline.runtimesFor` keep the `node`
-package out. The one place the substitution shows is the wire's
-`Program.runtime`, which says `node` for a `beam` build, and nothing reads it.
+`beam` is built as `node` (D405), and so is `os`. In the backend a platform
+decides one thing outside JavaScript's output, which `main` it accepts, and
+`node`'s is D72's `Task Never {}`, which is a BEAM program's `main` too, and a
+native one's; `common` accepts none. Nothing of Node's reaches a `beam` or an
+`os` build through it: the target gate (D320) and `compiler-node`'s
+`Compiler.Outline.runtimesFor` keep the `node` package out. The one place the
+substitution shows is the wire's `Program.runtime`, which says `node` for both,
+and nothing reads it.
+
+`linux`, `darwin` and `windows` are not built: they are for packages below
+`os`, and there is none until the `os` package is (geng-lang `m3-native.md`
+§NA12).
 -}
 toPlatform : Runtime -> Maybe Platform
 toPlatform runtime =
@@ -150,6 +157,7 @@ toPlatform runtime =
         Browser -> Just Platform.Browser
         Node -> Just Platform.Node
         Beam -> Just Platform.Node
+        Os -> Just Platform.Node
         _ -> Nothing
 
 
@@ -160,3 +168,32 @@ isBuilt runtime =
     when toPlatform runtime is
         Just _ -> True
         Nothing -> False
+
+
+{-| The runtimes the compiler builds for, in the order they are named to a
+person: the ones [isBuilt](#isBuilt) says yes to.
+-}
+built : Array Runtime
+built =
+    [ Any, Browser, Node, Beam, Os ]
+
+
+{-| [built](#built) as a sentence names it, for the messages that refuse a
+runtime: `any, browser, node, beam and os`.
+-}
+builtNames : String
+builtNames =
+    let
+        names =
+            Array.map toString built
+    in
+    when Array.popLast names is
+        Just { last, initial } ->
+            if Array.isEmpty initial then
+                last
+
+            else
+                String.join ", " initial ++ " and " ++ last
+
+        Nothing ->
+            ""
