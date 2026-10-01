@@ -313,6 +313,9 @@ type alias Value =
   -- Declared under `@capability` (D258): only the application and the
   -- declaring package may refer to it.
   , capability : Bool
+  -- Declared under `@inline` (D545), which only `core` writes: the inliner
+  -- opens every call to it whatever its size.
+  , inline : Bool
   , signature :
     Maybe
       { start : SourcePosition.Position

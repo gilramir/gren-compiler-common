@@ -61,6 +61,7 @@ type Error
     | IndentationError
     | UnknownAttribute String
     | AttributeNotOnCustomType
+    | InlineNotOnValue
     | AttributeNeedsFreshLine
     | AttributeAfterExtern String
     | CapabilityWithoutAnnotation
@@ -101,6 +102,9 @@ errorToString error =
 
         AttributeNotOnCustomType ->
             "Expected a custom type after this attribute"
+
+        InlineNotOnValue ->
+            "Expected a value declaration with a type annotation after '@inline'"
 
         AttributeNeedsFreshLine ->
             "Expected the declaration on the line after this attribute"
@@ -184,7 +188,7 @@ declarationValueParser { docs, start, attribute } =
         -- at the `@` a comment written after `@capability` sorted after it.
         Capability_ ->
             Parser.getPosition
-                |> Parser.andThen (\sigStart -> valueParser True sigStart)
+                |> Parser.andThen (\sigStart -> valueParser { capability = True, inline = False } sigStart)
                 |> Parser.andThen
                     (\value ->
                         when value is
@@ -201,25 +205,50 @@ declarationValueParser { docs, start, attribute } =
                     )
                 |> Parser.map finish
 
+        -- `@inline` (D545) is on a value and nothing else; its annotation
+        -- starts where its name does, as `@capability`'s does.
+        Inline_ ->
+            Parser.oneOf
+                [ Parser.getPosition
+                    |> Parser.andThen (\sigStart -> valueParser { capability = False, inline = True } sigStart)
+                    |> Parser.andThen
+                        (\value ->
+                            when value is
+                                Value v ->
+                                    when v.signature is
+                                        Nothing ->
+                                            Parser.problem InlineNotOnValue
+
+                                        Just _ ->
+                                            Parser.succeed value
+
+                                _ ->
+                                    Parser.succeed value
+                        )
+                , Parser.problem InlineNotOnValue
+                ]
+                |> Parser.map finish
+
         NoAttribute ->
             Parser.oneOf
                 [ typeParser []
                 , classParser
                 , instanceParser
-                , valueParser False start
+                , valueParser { capability = False, inline = False } start
                 ]
                 |> Parser.map finish
 
 
-valueParser : Bool -> SourcePosition.Position -> Parser Context Error DeclarationValue
-valueParser capability start =
+valueParser : { capability : Bool, inline : Bool } -> SourcePosition.Position -> Parser Context Error DeclarationValue
+valueParser attributes start =
     Expr.letDefNamedParser
         |> Parser.mapError ExprError
         |> Parser.map
             (\def ->
                 Value
                     { name = def.value.name
-                    , capability = capability
+                    , capability = attributes.capability
+                    , inline = attributes.inline
                     , signature =
                         Maybe.map
                             (\t ->
@@ -240,14 +269,16 @@ valueParser capability start =
 
 {-| The attributes the language has: `@derive(Eq, Ord, Inspect)` on a custom
 type, `@prim("i32_add")` on an annotation (`core.md` C13), `@extern` and
-`@externPure` on an annotation (`ffi.md` F1), and a bare `@capability` on a
-value that mints a capability (D258).
+`@externPure` on an annotation (`ffi.md` F1), a bare `@capability` on a
+value that mints a capability (D258), and a bare `@inline` on a value `core`
+wants opened at every call (D545).
 
 An attribute follows the documentation comment and precedes the declaration.
 -}
 type Attribute
     = NoAttribute
     | Capability_
+    | Inline_
     | Derive (Array (SourcePosition.Located String))
     | Prim_ (SourcePosition.Located String)
     | Extern_ AST.ExternImpl
@@ -270,6 +301,9 @@ attributeParser =
 
                         "capability" ->
                             Parser.map (\_ -> Capability_) bareAttributeEndParser
+
+                        "inline" ->
+                            Parser.map (\_ -> Inline_) bareAttributeEndParser
 
                         "extern" ->
                             Parser.map Extern_ (attributeArgsParser (externArgsParser False))

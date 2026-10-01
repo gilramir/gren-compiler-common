@@ -345,6 +345,7 @@ tests =
                                     { row = 1, col = 4 }
                                     "foo"
                             , capability = False
+                            , inline = False
                             , signature = Nothing
                             , args = []
                             , body =
@@ -367,6 +368,7 @@ tests =
                                     { row = 1, col = 10 }
                                     "typeCheck"
                             , capability = False
+                            , inline = False
                             , signature = Nothing
                             , args = []
                             , body =
@@ -389,6 +391,7 @@ tests =
                                     { row = 1, col = 10 }
                                     "portCheck"
                             , capability = False
+                            , inline = False
                             , signature = Nothing
                             , args = []
                             , body =
@@ -418,6 +421,7 @@ tests =
                                     { row = 3, col = 4 }
                                     "foo"
                             , capability = False
+                            , inline = False
                             , signature = Nothing
                             , args = []
                             , body =
@@ -441,6 +445,7 @@ tests =
                                     { row = 2, col = 4 }
                                     "foo"
                             , capability = False
+                            , inline = False
                             , signature =
                                 Just
                                     { constraints = []
@@ -490,6 +495,7 @@ tests =
                                     { row = 4, col = 4 }
                                     "foo"
                             , capability = False
+                            , inline = False
                             , signature =
                                 Just
                                     { constraints = []

@@ -462,10 +462,10 @@ declarationToModuleValue decl =
     when decl.value is
         Declaration.Value v ->
             let
-                -- A value under `@capability` begins at the attribute, which
-                -- is a row above its annotation's start.
+                -- A value under `@capability` or `@inline` begins at the
+                -- attribute, which is a row above its annotation's start.
                 start =
-                    if v.capability then
+                    if v.capability || v.inline then
                         decl.start
 
                     else

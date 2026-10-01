@@ -411,6 +411,7 @@ tests =
                                           { row = 4, col = 4 }
                                           "num"
                                   , capability = False
+                                  , inline = False
                                   , signature =
                                       Just
                                           { constraints = []
@@ -591,6 +592,7 @@ tests =
                                             { row = 4, col = 4 }
                                             "foo"
                                     , capability = False
+                                    , inline = False
                                     , signature =
                                         Just
                                             { constraints = []
@@ -696,6 +698,7 @@ tests =
                                             { row = 11, col = 4 }
                                             "bar"
                                     , capability = False
+                                    , inline = False
                                     , signature =
                                         Just
                                             { constraints = []
@@ -811,6 +814,7 @@ tests =
                                         { row = 9, col = 4 }
                                         "add"
                                 , capability = False
+                                , inline = False
                                 , signature =
                                     Just
                                         { constraints = []
