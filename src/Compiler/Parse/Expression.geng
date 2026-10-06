@@ -25,6 +25,7 @@ import Compiler.Parse.Pattern as Pattern
 import Compiler.Parse.Type as Type
 import Set exposing (Set)
 import Compiler.Parse.Context exposing (Context)
+import Array.Builder as Builder exposing (Builder)
 
 
 {-| The kind of errors that can happen while parsing expressions.
@@ -325,7 +326,7 @@ letParser =
         |> Parser.skip spaceParser
         |> Parser.keep letDefParser
         |> Parser.skip spaceParser
-        |> Parser.keep (Parser.loop [] letDefLoopParser)
+        |> Parser.keep (Parser.loop (Builder.empty 0) letDefLoopParser)
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.lazy (\_ -> parser))
         |> Parser.keep Parser.getPosition
@@ -408,7 +409,7 @@ letDefNamedParser =
                         (\_ -> var.start.col)
                         .indent
                         (\nextValue payload -> { payload | indent = nextValue })
-                    |> Parser.keep (Parser.loop [] (functionArgsParser "="))
+                    |> Parser.keep (Parser.loop (Builder.empty 0) (functionArgsParser "="))
                     |> Parser.skip spaceParser
                     |> Parser.keep (Parser.lazy (\_ -> parser))
             )
@@ -420,7 +421,7 @@ the end of the body: an extern declaration's Geng body (D222).
 defArgsAndBodyParser : Parser Context Error { args : Array AST.Pattern, body : AST.Expression }
 defArgsAndBodyParser =
     Parser.succeed (\args body -> { args = args, body = body })
-        |> Parser.keep (Parser.loop [] (functionArgsParser "="))
+        |> Parser.keep (Parser.loop (Builder.empty 0) (functionArgsParser "="))
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.lazy (\_ -> parser))
 
@@ -445,12 +446,12 @@ letDefDestructParser =
         |> Parser.keep (Parser.lazy (\_ -> parser))
 
 
-letDefLoopParser : Array (SourcePosition.Located AST.Def) -> Parser Context Error (Parser.Step (Array (SourcePosition.Located AST.Def)) (Array (SourcePosition.Located AST.Def)))
+letDefLoopParser : Builder (SourcePosition.Located AST.Def) -> Parser Context Error (Parser.Step (Builder (SourcePosition.Located AST.Def)) (Array (SourcePosition.Located AST.Def)))
 letDefLoopParser defs =
     Parser.oneOf
-        [ Parser.succeed (Parser.Done defs)
-            |> Parser.skip (Variable.keyword "in" (ExpectedKeyword "in"))
-        , Parser.succeed (\def -> Parser.Loop <| Array.pushLast def defs)
+        [ Variable.keyword "in" (ExpectedKeyword "in")
+            |> Parser.map (\_ -> Parser.Done (Builder.toArray defs))
+        , Parser.succeed (\def -> Parser.Loop <| Builder.pushLast def defs)
             |> Parser.keep letDefParser
             |> Parser.skip spaceParser
         ]
@@ -466,7 +467,7 @@ ifParser =
         |> Parser.keep ifBranchParser
         |> Parser.andThen
             (\{ startPos, firstBranch } ->
-                Parser.loop [ firstBranch ] (ifElseLoop startPos)
+                Parser.loop (Builder.pushLast firstBranch (Builder.empty 0)) (ifElseLoop startPos)
             )
 
 
@@ -485,10 +486,10 @@ ifBranchParser =
         |> Parser.skip spaceParser
 
 
-ifElseLoop : { row : Int, col : Int } -> Array AST.IfBranch -> Parser Context Error (Parser.Step (Array AST.IfBranch) AST.Expression)
+ifElseLoop : { row : Int, col : Int } -> Builder AST.IfBranch -> Parser Context Error (Parser.Step (Builder AST.IfBranch) AST.Expression)
 ifElseLoop startPos branches =
     Parser.oneOf
-        [ Parser.succeed (\branch -> Parser.Loop (Array.pushLast branch branches))
+        [ Parser.succeed (\branch -> Parser.Loop (Builder.pushLast branch branches))
             |> Parser.keep ifBranchParser
         , Parser.succeed
             (\expr ->
@@ -497,7 +498,7 @@ ifElseLoop startPos branches =
                         startPos
                         expr.end
                         (AST.If
-                            { branches = branches
+                            { branches = Builder.toArray branches
                             , elseBranch = expr
                             }
                         )
@@ -535,7 +536,7 @@ whenParser =
                         (\column ->
                             Parser.succeed (\firstBranch -> firstBranch)
                                 |> Parser.keep whenBranchParser
-                                |> Parser.andThen (\firstBranch -> Parser.loop [ firstBranch ] (whenBranchLoopParser column))
+                                |> Parser.andThen (\firstBranch -> Parser.loop (Builder.pushLast firstBranch (Builder.empty 0)) (whenBranchLoopParser column))
                                 |> Space.scopeIndentToColumn
                         )
                     |> Parser.map
@@ -568,13 +569,14 @@ whenBranchParser =
         |> Parser.keep (Parser.lazy (\_ -> parser))
 
 
-whenBranchLoopParser : Int -> Array AST.WhenBranch -> Parser Context Error (Parser.Step (Array AST.WhenBranch) (Array AST.WhenBranch))
+whenBranchLoopParser : Int -> Builder AST.WhenBranch -> Parser Context Error (Parser.Step (Builder AST.WhenBranch) (Array AST.WhenBranch))
 whenBranchLoopParser column branches =
     Parser.oneOf
-        [ Parser.succeed (\branch -> Parser.Loop (Array.pushLast branch branches))
+        [ Parser.succeed (\branch -> Parser.Loop (Builder.pushLast branch branches))
             |> Parser.skip (aligned column)
             |> Parser.keep whenBranchParser
-        , Parser.succeed (Parser.Done branches)
+        , Parser.succeed {}
+            |> Parser.map (\_ -> Parser.Done (Builder.toArray branches))
         ]
 
 
@@ -620,19 +622,19 @@ function =
                             , body = body
                             }
                     )
-                    |> Parser.keep (Parser.loop [ firstArg ] (functionArgsParser "->"))
+                    |> Parser.keep (Parser.loop (Builder.pushLast firstArg (Builder.empty 0)) (functionArgsParser "->"))
                     |> Parser.skip spaceParser
                     |> Parser.keep parser
                     |> Parser.skip spaceParser
             )
 
 
-functionArgsParser : String -> Array AST.Pattern -> Parser Context Error (Parser.Step (Array AST.Pattern) (Array AST.Pattern))
+functionArgsParser : String -> Builder AST.Pattern -> Parser Context Error (Parser.Step (Builder AST.Pattern) (Array AST.Pattern))
 functionArgsParser terminator array =
     Parser.oneOf
-        [ Parser.succeed (Parser.Done array)
-            |> Parser.skip (Parser.token terminator (ExpectedKeyword terminator))
-        , Parser.succeed (\expr -> Parser.Loop (Array.pushLast expr array))
+        [ Parser.token terminator (ExpectedKeyword terminator)
+            |> Parser.map (\_ -> Parser.Done (Builder.toArray array))
+        , Parser.succeed (\expr -> Parser.Loop (Builder.pushLast expr array))
             |> Parser.keep (Parser.mapError PatternError Pattern.parser)
             |> Parser.skip spaceParser
         ]
@@ -856,18 +858,18 @@ arrayParser =
                         (\firstElement ->
                             Parser.succeed identity
                                 |> Parser.skip spaceParser
-                                |> Parser.keep (Parser.loop [ firstElement ] innerArrayParser)
+                                |> Parser.keep (Parser.loop (Builder.pushLast firstElement (Builder.empty 0)) innerArrayParser)
                         )
                 ]
             )
 
 
-innerArrayParser : Array AST.Expression -> Parser Context Error (Parser.Step (Array AST.Expression) (Array AST.Expression))
+innerArrayParser : Builder AST.Expression -> Parser Context Error (Parser.Step (Builder AST.Expression) (Array AST.Expression))
 innerArrayParser array =
     Parser.oneOf
-        [ Parser.succeed (Parser.Done array)
-            |> Parser.skip (Parser.chompChar ']' (ExpectedChar ']'))
-        , Parser.succeed (\expr -> Parser.Loop (Array.pushLast expr array))
+        [ Parser.chompChar ']' (ExpectedChar ']')
+            |> Parser.map (\_ -> Parser.Done (Builder.toArray array))
+        , Parser.succeed (\expr -> Parser.Loop (Builder.pushLast expr array))
             |> Parser.skip (Parser.chompChar ',' (ExpectedChar ','))
             |> Parser.skip spaceParser
             |> Parser.keep (Parser.lazy (\_ -> parser))
@@ -907,7 +909,7 @@ recordParser =
                                                         }
                                                 )
                                                 |> Parser.skip spaceParser
-                                                |> Parser.keep (Parser.loop [ firstPair ] innerRecordParser)
+                                                |> Parser.keep (Parser.loop (Builder.pushLast firstPair (Builder.empty 0)) innerRecordParser)
                                         )
                                 , Parser.succeed identity
                                     |> Parser.skip (Parser.chompChar '=' (ExpectedChar '='))
@@ -926,7 +928,7 @@ recordParser =
                                                         |> Parser.skip spaceParser
                                                         |> Parser.keep
                                                             (Parser.loop
-                                                                [ { field = locatedField, value = value } ]
+                                                                (Builder.pushLast { field = locatedField, value = value } (Builder.empty 0))
                                                                 innerRecordParser
                                                             )
 
@@ -956,12 +958,12 @@ recordFieldParser =
         |> Parser.keep (Parser.lazy (\_ -> parser))
 
 
-innerRecordParser : Array AST.RecordField -> Parser Context Error (Parser.Step (Array AST.RecordField) (Array AST.RecordField))
+innerRecordParser : Builder AST.RecordField -> Parser Context Error (Parser.Step (Builder AST.RecordField) (Array AST.RecordField))
 innerRecordParser array =
     Parser.oneOf
-        [ Parser.succeed (Parser.Done array)
-            |> Parser.skip (Parser.chompChar '}' (ExpectedChar '}'))
-        , Parser.succeed (\expr -> Parser.Loop (Array.pushLast expr array))
+        [ Parser.chompChar '}' (ExpectedChar '}')
+            |> Parser.map (\_ -> Parser.Done (Builder.toArray array))
+        , Parser.succeed (\expr -> Parser.Loop (Builder.pushLast expr array))
             |> Parser.skip (Parser.chompChar ',' (ExpectedChar ','))
             |> Parser.skip spaceParser
             |> Parser.keep recordFieldParser
