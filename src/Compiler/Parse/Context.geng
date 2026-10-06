@@ -28,11 +28,15 @@ import Compiler.SourcePosition as SourcePosition
 * `indent` - the current indentation level
 * `lineStart` - the first non-whitespace character on the current line
 * `comments` - comments we've parsed from the source code
+* `escapes` - for each string or character literal that spells a code point
+  as `\u{...}`, where the literal starts and the code points it spells that
+  way, so that a formatter can keep the author's escapes (geng-lang D601)
 -}
 type alias Context =
     { indent : Int
     , lineStart : Int
     , comments : Builder (SourcePosition.Located Comment)
+    , escapes : Builder { start : SourcePosition.Position, codes : Array Int }
     }
 
 
@@ -43,6 +47,7 @@ empty =
     { indent = 1
     , lineStart = 1
     , comments = Array.Builder.empty 0
+    , escapes = Array.Builder.empty 0
     }
 
 
