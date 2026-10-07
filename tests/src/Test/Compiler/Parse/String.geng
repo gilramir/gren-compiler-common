@@ -15,9 +15,14 @@ tests =
         [ describe "Characters"
             [ fuzz Fuzz.char "Can parse unicode chars" <| \char ->
                 let
+                    -- A line break written as itself is refused, as `gren make`
+                    -- refuses it (geng-lang D602), so it is written escaped.
                     charString =
                         if char == '\\' then
                             "\\\\"
+
+                        else if char == '\n' then
+                            "\\n"
 
                         else
                             String.fromChar char
@@ -68,9 +73,12 @@ tests =
             , test "Example with surrogate pair" <| \_ ->
                 Run.run PS.string Context.empty "\"this is a \\\" Test 𤭢 -String_\""
                     |> Expect.equal (Ok "this is a \" Test 𤭢 -String_")
-            , test "crlf is normalized to lf" <| \_ ->
+            , test "a line break written as itself ends a single-line string too early" <| \_ ->
                 Run.run PS.string Context.empty "\"\r\n\""
-                    |> Expect.equal (Ok "\n")
+                    |> expectErr PS.ExpectedQuote
+            , test "a line break written as itself is not a char" <| \_ ->
+                Run.run PS.char Context.empty "\'\n\'"
+                    |> expectErr PS.ExpectedQuote
             ]
         , describe "Multi-line Strings"
             [ test "Simple case" <| \_ ->

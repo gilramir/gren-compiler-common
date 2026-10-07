@@ -36,10 +36,19 @@ tests =
                     |> expectExpression (AST.NumberLiteral (Number.Hex { text = "0xDE" }))
             , test "Char" <| \_ ->
                 Run.run PE.parser Context.empty "'z'"
-                    |> expectExpression (AST.CharLiteral 'z')
+                    |> expectExpression (AST.CharLiteral { value = 'z', text = "'z'" })
             , test "String" <| \_ ->
                 Run.run PE.parser Context.empty "\"test\""
-                    |> expectExpression (AST.StringLiteral "test")
+                    |> expectExpression (AST.StringLiteral { value = "test", text = "\"test\"" })
+            , test "Char keeps an escape as written" <| \_ ->
+                Run.run PE.parser Context.empty "'\\u{0301}'"
+                    |> expectExpression (AST.CharLiteral { value = '\u{0301}', text = "'\\u{0301}'" })
+            , test "String keeps its escapes as written" <| \_ ->
+                Run.run PE.parser Context.empty "\"\\u{00e9}\\r\""
+                    |> expectExpression (AST.StringLiteral { value = "\u{00E9}\r", text = "\"\\u{00e9}\\r\"" })
+            , test "Multi-line string keeps its lines as written" <| \_ ->
+                Run.run PE.parser Context.empty "\"\"\"\none\\u{0020}\n\"\"\""
+                    |> expectExpression (AST.StringLiteral { value = "one ", text = "\"\"\"\none\\u{0020}\n\"\"\"" })
             , test "Ctor" <| \_ ->
                 Run.run PE.parser Context.empty "True"
                     |> expectExpression (AST.Var { name = "True", varType = AST.CapVar })
@@ -340,7 +349,7 @@ tests =
                                                   SourcePosition.at
                                                       { row = 3, col = 10 }
                                                       { row = 3, col = 15 }
-                                                      (AST.StringLiteral "One")
+                                                      (AST.StringLiteral { value = "One", text = "\"One\"" })
                                               }
                                             , { pattern =
                                                   SourcePosition.at
@@ -351,7 +360,7 @@ tests =
                                                   SourcePosition.at
                                                       { row = 4, col = 10 }
                                                       { row = 4, col = 16 }
-                                                      (AST.StringLiteral "None")
+                                                      (AST.StringLiteral { value = "None", text = "\"None\"" })
                                               }
                                             ]
                                         }
@@ -846,15 +855,15 @@ tests =
                         (AST.ArrayLiteral
                             [ { start = { row = 1, col = 3 }
                               , end = { row = 1, col = 8 }
-                              , value = AST.StringLiteral "one"
+                              , value = AST.StringLiteral { value = "one", text = "\"one\"" }
                               }
                             , { start = { row = 1, col = 10 }
                               , end = { row = 1, col = 15 }
-                              , value = AST.StringLiteral "two"
+                              , value = AST.StringLiteral { value = "two", text = "\"two\"" }
                               }
                             , { start = { row = 2, col = 2 }
                               , end = { row = 2, col = 9 }
-                              , value = AST.StringLiteral "three"
+                              , value = AST.StringLiteral { value = "three", text = "\"three\"" }
                               }
                             ]
                         )
@@ -1208,7 +1217,7 @@ tests =
                                           SourcePosition.at
                                               { row = 1, col = 20 }
                                               { row = 1, col = 23 }
-                                              (AST.CharLiteral 'a')
+                                              (AST.CharLiteral { value = 'a', text = "'a'" })
                                       }
                                     ]
                                 }
@@ -1245,7 +1254,7 @@ tests =
                                           SourcePosition.at
                                               { row = 2, col = 10 }
                                               { row = 2, col = 13 }
-                                              (AST.CharLiteral 'a')
+                                              (AST.CharLiteral { value = 'a', text = "'a'" })
                                       }
                                     , { pattern =
                                           SourcePosition.at
@@ -1264,7 +1273,7 @@ tests =
                                           SourcePosition.at
                                               { row = 3, col = 10 }
                                               { row = 3, col = 13 }
-                                              (AST.CharLiteral 'b')
+                                              (AST.CharLiteral { value = 'b', text = "'b'" })
                                       }
                                     ]
                                 }

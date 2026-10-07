@@ -310,10 +310,10 @@ term =
                 , numberBy Number.zeroOrHigher
                 , String.string
                     |> Parser.mapError StringError
-                    |> Parser.map AST.PStr
+                    |> Parser.mapChompedString (\text value -> AST.PStr { value = value, text = text })
                 , String.char
                     |> Parser.mapError StringError
-                    |> Parser.map AST.PChr
+                    |> Parser.mapChompedString (\text value -> AST.PChr { value = value, text = text })
                 ]
             )
         |> Parser.keep Parser.getPosition

@@ -137,11 +137,11 @@ tests =
         , test "string" <| \_ ->
             Run.run PT.parser Context.empty "\"some String\""
                 |> expectPattern
-                    (AST.PStr "some String")
+                    (AST.PStr { value = "some String", text = "\"some String\"" })
         , test "char" <| \_ ->
             Run.run PT.parser Context.empty "'z'"
                 |> expectPattern
-                    (AST.PChr 'z')
+                    (AST.PChr { value = 'z', text = "'z'" })
         , test "array (empty)" <| \_ ->
             Run.run PT.parser Context.empty "[]"
                 |> expectPattern

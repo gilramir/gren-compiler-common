@@ -51,11 +51,14 @@ type alias Expression =
     SourcePosition.Located Expression_
 
 
-{-|
+{-| A character or string literal has its `value`, decoded, and its `text`,
+the literal exactly as written, quotes and escapes and a multi-line string's
+indentation included, so that a formatter can write it as the author did
+(geng-lang D602). A number keeps its text the same way, in `Number.Outcome`.
 -}
 type Expression_
-  = CharLiteral Char
-  | StringLiteral String
+  = CharLiteral { value : Char, text : String }
+  | StringLiteral { value : String, text : String }
   | NumberLiteral Number.Outcome
   | Var
     { varType : VarType
@@ -194,8 +197,8 @@ type Pattern_
     , arg : Maybe Pattern
     }
   | PArray (Array Pattern)
-  | PChr Char
-  | PStr String
+  | PChr { value : Char, text : String }
+  | PStr { value : String, text : String }
   | PInt
     { text : String
     , isHex : Bool

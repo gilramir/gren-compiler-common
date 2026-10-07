@@ -759,10 +759,10 @@ term =
                     |> Parser.map AST.NumberLiteral
                 , String.char
                     |> Parser.mapError StringError
-                    |> Parser.map AST.CharLiteral
+                    |> Parser.mapChompedString (\text value -> AST.CharLiteral { value = value, text = text })
                 , String.string
                     |> Parser.mapError StringError
-                    |> Parser.map AST.StringLiteral
+                    |> Parser.mapChompedString (\text value -> AST.StringLiteral { value = value, text = text })
                 , arrayParser
                     |> Parser.map AST.ArrayLiteral
                 , recordParser

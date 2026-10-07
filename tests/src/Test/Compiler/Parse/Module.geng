@@ -658,7 +658,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 6, col = 14 }
                                                                 { row = 6, col = 20 }
-                                                                (AST.StringLiteral "Zero")
+                                                                (AST.StringLiteral { value = "Zero", text = "\"Zero\"" })
                                                         }
                                                     , { pattern =
                                                             SourcePosition.at
@@ -669,7 +669,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 7, col = 14 }
                                                                 { row = 7, col = 19 }
-                                                                (AST.StringLiteral "One")
+                                                                (AST.StringLiteral { value = "One", text = "\"One\"" })
                                                         }
                                                     , { pattern =
                                                             SourcePosition.at
@@ -680,7 +680,7 @@ tests =
                                                             SourcePosition.at
                                                                 { row = 8, col = 14 }
                                                                 { row = 8, col = 21 }
-                                                                (AST.StringLiteral "Other")
+                                                                (AST.StringLiteral { value = "Other", text = "\"Other\"" })
                                                         }
                                                     ]
                                                 }

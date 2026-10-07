@@ -16,7 +16,6 @@ import String.Parser.Advanced as Parser exposing (Parser)
 import Compiler.Parse.Number as Number
 import Compiler.Parse.Context exposing (Context)
 import Compiler.SourcePosition exposing (Position)
-import Array.Builder
 
 
 {-| The kind of errors that can happen while parsing characters and strings.
@@ -68,47 +67,14 @@ errorToString error =
 -}
 char : Parser Context Error Char
 char =
-    Parser.succeed (\start c -> { start = start, c = c })
-        |> Parser.keep Parser.getPosition
+    Parser.succeed identity
         |> Parser.skip charQuote
         |> Parser.keep coreParser
         |> Parser.skip charQuote
-        |> Parser.andThen
-            (\{ start, c } ->
-                rememberEscapes start
-                    (if c.unicode then
-                        [ Char.toCode c.char ]
-
-                     else
-                        []
-                    )
-                    c.char
-            )
 
 
-{-| `value`, once the code points a literal starting at `start` spells as
-`\u{...}` are recorded in the payload, so that a formatter can spell them the
-same way (`Context.escapes`, geng-lang D601). Most literals spell none, and
-record nothing.
--}
-rememberEscapes : Position -> Array Int -> a -> Parser Context Error a
-rememberEscapes start codes value =
-    if Array.isEmpty codes then
-        Parser.succeed value
-
-    else
-        Parser.updatePayload
-            (\payload ->
-                { payload
-                    | escapes = Array.Builder.pushLast { start = start, codes = codes } payload.escapes
-                }
-            )
-            Parser.getPayload
-            |> Parser.map (\_ -> value)
-
-
-{-| One character of a literal, and whether it was spelled `\u{...}`. -}
-coreParser : Parser Context Error { char : Char, unicode : Bool }
+{-| One character of a literal, decoded. -}
+coreParser : Parser Context Error Char
 coreParser =
     Parser.oneOf
         [ Parser.chompChar '\\' ExpectedChar
@@ -116,17 +82,17 @@ coreParser =
                 (\_ ->
                     Parser.oneOf
                         [ Parser.chompChar 'n' ExpectedChar
-                            |> Parser.map (\_ -> plain '\n')
+                            |> Parser.map (\_ -> '\n')
                         , Parser.chompChar 'r' ExpectedChar
-                            |> Parser.map (\_ -> plain '\r')
+                            |> Parser.map (\_ -> '\r')
                         , Parser.chompChar 't' ExpectedChar
-                            |> Parser.map (\_ -> plain '\t')
+                            |> Parser.map (\_ -> '\t')
                         , Parser.chompChar '\\' ExpectedChar
-                            |> Parser.map (\_ -> plain '\\')
+                            |> Parser.map (\_ -> '\\')
                         , Parser.chompChar '\'' ExpectedChar
-                            |> Parser.map (\_ -> plain '\'')
+                            |> Parser.map (\_ -> '\'')
                         , Parser.chompChar '\"' ExpectedChar
-                            |> Parser.map (\_ -> plain '\"')
+                            |> Parser.map (\_ -> '\"')
                         , Parser.succeed identity
                             |> Parser.skip unicodeOpening
                             |> Parser.keep (Number.hexParser ExpectedValidUnicode)
@@ -148,7 +114,7 @@ coreParser =
                                             Parser.problem ExpectedValidUnicode
 
                                         Just character ->
-                                            Parser.succeed { char = character, unicode = True }
+                                            Parser.succeed character
                                 )
                         , Parser.chompIf (\_ -> True)  ExpectedChar
                             |> Parser.getChompedString
@@ -164,14 +130,17 @@ coreParser =
                             Parser.problem ExpectedChar
 
                         Just { first = c } ->
-                            Parser.succeed (plain c)
+                            -- A line break written as itself ends a
+                            -- single-line string or a character too early, as
+                            -- `gren make` says; a multi-line string reads its
+                            -- line breaks before it gets here (geng-lang D602).
+                            if c == '\n' then
+                                Parser.problem ExpectedQuote
+
+                            else
+                                Parser.succeed c
                 )
         ]
-
-
-plain : Char -> { char : Char, unicode : Bool }
-plain c =
-    { char = c, unicode = False }
 
 
 charQuote : Parser Context Error {}
@@ -208,24 +177,22 @@ string =
     Parser.oneOf
         [ Parser.getPosition
             |> Parser.andThen multiLineString
-        , Parser.succeed (\start read -> { start = start, read = read })
-            |> Parser.keep Parser.getPosition
+        , Parser.succeed .str
             |> Parser.skip singleLineStrQuote
             |> Parser.keep (Parser.loop noneRead (innerSingleLineString singleLineStrQuote))
-            |> Parser.andThen (\{ start, read } -> rememberEscapes start read.codes read.str)
         ]
 
 
-{-| A string literal's text so far, and the code points it has spelled as
-`\u{...}`, each once. In a multi-line string, `short` says that the line being
-read had fewer spaces than the indentation, which only a blank line may. -}
+{-| A string literal's text so far. In a multi-line string, `short` says that
+the line being read had fewer spaces than the indentation, which only a blank
+line may. -}
 type alias Read =
-    { str : String, codes : Array Int, short : Bool }
+    { str : String, short : Bool }
 
 
 noneRead : Read
 noneRead =
-    { str = "", codes = [], short = False }
+    { str = "", short = False }
 
 
 {-| A multi-line string whose opening quotes are at `start`, not yet read.
@@ -262,7 +229,7 @@ multiLineString start =
                                 Parser.problem MisalignedMultiQuotes
 
                             else
-                                rememberEscapes start read.codes (dropClosingLine read.str)
+                                Parser.succeed (dropClosingLine read.str)
                         )
             )
 
@@ -327,17 +294,9 @@ innerMultiLineString indent read =
         ]
 
 
-pushRead : { char : Char, unicode : Bool } -> Read -> Read
+pushRead : Char -> Read -> Read
 pushRead c read =
-    { read
-        | str = String.pushLast c.char read.str
-        , codes =
-            if c.unicode && not (Array.member (Char.toCode c.char) read.codes) then
-                Array.pushLast (Char.toCode c.char) read.codes
-
-            else
-                read.codes
-    }
+    { read | str = String.pushLast c read.str }
 
 
 innerSingleLineString : Parser Context Error {} -> Read -> Parser Context Error (Parser.Step Read Read)
@@ -346,8 +305,6 @@ innerSingleLineString endToken read =
         [ Parser.succeed {}
             |> Parser.skip endToken
             |> Parser.map (\_ -> Parser.Done read)
-        , Parser.succeed (\_ -> Parser.Loop { read | str = String.pushLast '\n' read.str })
-            |> Parser.keep crlf
         , Parser.succeed (\c -> Parser.Loop (pushRead c read))
             |> Parser.keep coreParser
         ]
