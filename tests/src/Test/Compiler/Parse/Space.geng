@@ -27,6 +27,15 @@ tests =
             , test "parses empty string" <| \_ ->
                 Run.run PS.parser Context.empty ""
                     |> Expect.equal (Ok {})
+            , test "a direction control written as itself is refused in a line comment" <| \_ ->
+                Run.run PS.parser Context.empty "-- a\u{202E}b\n"
+                    |> expectBidiControl 0x202E
+            , test "a direction control written as itself is refused in a block comment" <| \_ ->
+                Run.run PS.parser Context.empty "{- a\u{2069}b -}"
+                    |> expectBidiControl 0x2069
+            , test "a comment in right-to-left letters is accepted" <| \_ ->
+                Run.run PS.parser Context.empty "-- \u{05E9}\u{05DC}\u{05D5}\u{05DD}\n"
+                    |> Expect.equal (Ok {})
             , test "can read from context where the first non-space col began" <| \_ ->
                 Run.run payloadParser Context.empty "a"
                     |> expectLineStart 1
@@ -150,3 +159,13 @@ expectLineStart col resultContext =
 
         Ok ctx ->
             Expect.equal col ctx.lineStart
+
+
+expectBidiControl : Int -> Result (Array (Run.DeadEnd PS.Error)) a -> Expectation
+expectBidiControl code result =
+    when result is
+        Ok _ ->
+            Expect.fail "Expected a direction control to be refused"
+
+        Err problems ->
+            Expect.equal (Array.map .problem problems |> Array.takeFirst 1) [ PS.BidiControl code ]

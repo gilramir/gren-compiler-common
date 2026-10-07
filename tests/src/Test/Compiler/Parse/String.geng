@@ -79,6 +79,21 @@ tests =
             , test "a line break written as itself is not a char" <| \_ ->
                 Run.run PS.char Context.empty "\'\n\'"
                     |> expectErr PS.ExpectedQuote
+            , test "a direction control written as itself is refused in a string" <| \_ ->
+                Run.run PS.string Context.empty "\"user\u{202E} x\""
+                    |> expectErr (PS.BidiControl 0x202E)
+            , test "a direction control written as itself is refused in a multi-line string" <| \_ ->
+                Run.run PS.string Context.empty "\"\"\"\na\u{2066}b\n\"\"\""
+                    |> expectErr (PS.BidiControl 0x2066)
+            , test "a direction control written as itself is refused in a char" <| \_ ->
+                Run.run PS.char Context.empty "\'\u{202A}\'"
+                    |> expectErr (PS.BidiControl 0x202A)
+            , test "a direction control's escape is accepted" <| \_ ->
+                Run.run PS.string Context.empty "\"a\\u{202E}b\""
+                    |> Expect.equal (Ok "a\u{202E}b")
+            , test "a right-to-left mark, which reorders nothing, is accepted" <| \_ ->
+                Run.run PS.string Context.empty "\"a\u{200F}b\""
+                    |> Expect.equal (Ok "a\u{200F}b")
             ]
         , describe "Multi-line Strings"
             [ test "Simple case" <| \_ ->

@@ -5,12 +5,19 @@ module Compiler.Parse.Space exposing
     , scopeIndentToColumn
     , checkIndent
     , errorToString
+    , isBidiControl
+    , firstBidiControl
+    , codePointName
     )
 
 
 {-| This module provides parsers for whitespace and comments in Gren code.
 
 @docs parser, Error, errorToString
+
+## Direction controls
+
+@docs isBidiControl, firstBidiControl, codePointName
 
 ## Indentation helpers
 
@@ -32,6 +39,7 @@ type Error
     | ExpectedMultiLineOpen
     | ExpectedMultiLineClose
     | InvalidWhiteSpace
+    | BidiControl Int
 
 
 {-| Returns a human-readable description of an `Error`.
@@ -50,6 +58,9 @@ errorToString error =
         
         InvalidWhiteSpace ->
             "Invalid whitespace character"
+
+        BidiControl code ->
+            "A comment has a direction control character, " ++ codePointName code ++ ", written as itself; take it out of the comment"
 
 
 {-| Use this to parse whitespace and comments.
@@ -85,7 +96,7 @@ parseLoop _state =
                     |> SourcePosition.at start end
             )
             |> Parser.keep Parser.getPosition
-            |> Parser.keep (Parser.getChompedString <| Parser.lineComment "--" ExpectedLineComment)
+            |> Parser.keep (Parser.getChompedString (Parser.lineComment "--" ExpectedLineComment) |> Parser.andThen refuseBidiControls)
             |> Parser.keep Parser.getPosition
             |> Parser.andThen
                 (\value ->
@@ -121,6 +132,7 @@ parseLoop _state =
                     { string = "-}", expecting = ExpectedMultiLineClose }
                     Parser.Nestable
                     |> Parser.getChompedString
+                    |> Parser.andThen refuseBidiControls
                 )
             |> Parser.keep Parser.getPosition
             |> Parser.andThen
@@ -139,6 +151,65 @@ parseLoop _state =
             |> Parser.skip (Parser.chompWhile validWhiteSpace)
         , Parser.succeed (Parser.Done {})
         ]
+
+
+{-| `text`, unless it has a direction control written in it (geng-lang D604). -}
+refuseBidiControls : String -> Parser Context Error String
+refuseBidiControls text =
+    when firstBidiControl text is
+        Just code ->
+            Parser.problem (BidiControl code)
+
+        Nothing ->
+            Parser.succeed text
+
+
+{-| The direction control `code` is, if it is one: U+202A to U+202E (LRE, RLE,
+PDF, LRO, RLO) and U+2066 to U+2069 (LRI, RLI, FSI, PDI). Each changes the order
+the text after it is displayed in, so a line can read differently from what the
+compiler reads, and none may be written as itself in a literal or a comment
+(geng-lang D604).
+-}
+isBidiControl : Int -> Bool
+isBidiControl code =
+    (code >= 0x202A && code <= 0x202E) || (code >= 0x2066 && code <= 0x2069)
+
+
+{-| The first direction control written in `text`, if there is one. -}
+firstBidiControl : String -> Maybe Int
+firstBidiControl text =
+    String.foldl
+        (\c found ->
+            when found is
+                Just _ ->
+                    found
+
+                Nothing ->
+                    if isBidiControl (Char.toCode c) then
+                        Just (Char.toCode c)
+
+                    else
+                        Nothing
+        )
+        Nothing
+        text
+
+
+{-| `code` as `U+` and four upper-case hex digits. -}
+codePointName : Int -> String
+codePointName code =
+    let
+        digit d =
+            String.slice d (d + 1) "0123456789ABCDEF"
+
+        hex n =
+            if n < 16 then
+                digit n
+
+            else
+                hex (n // 16) ++ digit (modBy 16 n)
+    in
+    "U+" ++ String.padLeft 4 '0' (hex code)
 
 
 validWhiteSpace : Char -> Bool

@@ -705,6 +705,9 @@ docParser toErr =
 
                 Space.InvalidWhiteSpace ->
                     toErr "expected white space character"
+
+                Space.BidiControl code ->
+                    toErr ("no direction control character (" ++ Space.codePointName code ++ ") written as itself in a comment")
     in
     Parser.oneOf
         [ Parser.succeed
@@ -727,6 +730,15 @@ docParser toErr =
                     { string = "-}", expecting = toErr "-}" }
                     Parser.Nestable
                     |> Parser.getChompedString
+                    |> Parser.andThen
+                        (\doc ->
+                            when Space.firstBidiControl doc is
+                                Just code ->
+                                    Parser.problem (spaceErr (Space.BidiControl code))
+
+                                Nothing ->
+                                    Parser.succeed doc
+                        )
                 )
             |> Parser.keep Parser.getPosition
             |> Parser.skip (Parser.mapError spaceErr Space.parser)

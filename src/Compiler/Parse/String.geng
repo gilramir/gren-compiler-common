@@ -14,6 +14,7 @@ module Compiler.Parse.String exposing
 
 import String.Parser.Advanced as Parser exposing (Parser)
 import Compiler.Parse.Number as Number
+import Compiler.Parse.Space as Space
 import Compiler.Parse.Context exposing (Context)
 import Compiler.SourcePosition exposing (Position)
 
@@ -29,6 +30,7 @@ type Error
     | ExpectedUnicodeClosing
     | ExpectedNewline
     | MisalignedMultiQuotes
+    | BidiControl Int
 
 
 {-| Returns a human-readable description of an `Error`.
@@ -59,6 +61,13 @@ errorToString error =
         
         MisalignedMultiQuotes ->
             "Multi-line string lines are not indented equally"
+
+        BidiControl code ->
+            "A direction control character, "
+                ++ Space.codePointName code
+                ++ ", is written as itself; if you mean to have it here, write it as \\u{"
+                ++ String.dropFirst 2 (Space.codePointName code)
+                ++ "}"
 
 
 {-| Use this to parse character literals.
@@ -136,6 +145,12 @@ coreParser =
                             -- line breaks before it gets here (geng-lang D602).
                             if c == '\n' then
                                 Parser.problem ExpectedQuote
+
+                            else if Space.isBidiControl (Char.toCode c) then
+                                -- Written as itself, it reorders how the text
+                                -- after it is displayed (geng-lang D604); the
+                                -- escape is how to write one.
+                                Parser.problem (BidiControl (Char.toCode c))
 
                             else
                                 Parser.succeed c
