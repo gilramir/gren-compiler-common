@@ -206,62 +206,8 @@ crlf =
 string : Parser Context Error String
 string =
     Parser.oneOf
-        [ Parser.succeed
-            (\startPos read endPos ->
-                { start = startPos
-                , str = String.trimRight read.str
-                , codes = read.codes
-                , end = endPos
-                }
-            )
-            |> Parser.keep Parser.getPosition
-            |> Parser.skip multiLineStrQuote
-            |> Parser.skip
-                (Parser.oneOf
-                    [ Parser.chompChar '\n' ExpectedNewline
-                    , crlf
-                    ]
-                )
-            |> Parser.keep (Parser.loop noneRead (innerSingleLineString multiLineStrQuote))
-            |> Parser.keep Parser.getPosition
-            |> Parser.andThen
-                (\{ start, str, codes, end } ->
-                    if end.col - 3 /= start.col then
-                        Parser.problem MisalignedMultiQuotes
-
-                    else
-                        let
-                            requiredIndent =
-                                start.col - 1
-
-                            lines =
-                                String.split "\n" str
-
-                            linesSufficientlyIndented =
-                                lines
-                                    |> Array.all
-                                        (\line ->
-                                            if String.isEmpty line then
-                                                True
-
-                                            else
-                                                let
-                                                    whiteSpacePortion =
-                                                        String.takeFirst requiredIndent line
-                                                in
-                                                String.count whiteSpacePortion <= requiredIndent
-                                                    && String.all (\c -> c == ' ') whiteSpacePortion
-                                        )
-                        in
-                        if linesSufficientlyIndented then
-                            lines
-                                |> Array.map (String.dropFirst requiredIndent) 
-                                |> String.join "\n"
-                                |> rememberEscapes start codes
-
-                        else
-                            Parser.problem MisalignedMultiQuotes
-                )
+        [ Parser.getPosition
+            |> Parser.andThen multiLineString
         , Parser.succeed (\start read -> { start = start, read = read })
             |> Parser.keep Parser.getPosition
             |> Parser.skip singleLineStrQuote
@@ -271,14 +217,127 @@ string =
 
 
 {-| A string literal's text so far, and the code points it has spelled as
-`\u{...}`, each once. -}
+`\u{...}`, each once. In a multi-line string, `short` says that the line being
+read had fewer spaces than the indentation, which only a blank line may. -}
 type alias Read =
-    { str : String, codes : Array Int }
+    { str : String, codes : Array Int, short : Bool }
 
 
 noneRead : Read
 noneRead =
-    { str = "", codes = [] }
+    { str = "", codes = [], short = False }
+
+
+{-| A multi-line string whose opening quotes are at `start`, not yet read.
+
+Every line starts with as many spaces as there are columns before the opening
+quotes, and they are not part of the string. The closing quotes are in the
+opening ones' column, and the string ends with the line break before them
+(geng-lang D603). The spaces are counted as the source is read, so an escape is
+never indentation and never a line break, and nothing the content ends with is
+trimmed.
+-}
+multiLineString : Position -> Parser Context Error String
+multiLineString start =
+    let
+        indent =
+            start.col - 1
+    in
+    Parser.succeed identity
+        |> Parser.skip multiLineStrQuote
+        |> Parser.skip
+            (Parser.oneOf
+                [ Parser.chompChar '\n' ExpectedNewline
+                , crlf
+                ]
+            )
+        |> Parser.keep (lineIndentation indent)
+        |> Parser.andThen (\short -> Parser.loop { noneRead | short = short } (innerMultiLineString indent))
+        |> Parser.andThen
+            (\read ->
+                Parser.getPosition
+                    |> Parser.andThen
+                        (\end ->
+                            if end.col - 3 /= start.col then
+                                Parser.problem MisalignedMultiQuotes
+
+                            else
+                                rememberEscapes start read.codes (dropClosingLine read.str)
+                        )
+            )
+
+
+{-| The spaces a line of a multi-line string starts with, up to `indent` of
+them, and whether there were fewer. -}
+lineIndentation : Int -> Parser Context Error Bool
+lineIndentation indent =
+    Parser.loop 0
+        (\count ->
+            if count >= indent then
+                Parser.succeed (Parser.Done False)
+
+            else
+                Parser.oneOf
+                    [ Parser.chompChar ' ' ExpectedChar
+                        |> Parser.map (\_ -> Parser.Loop (count + 1))
+                    , Parser.succeed (Parser.Done True)
+                    ]
+        )
+
+
+{-| The content as read ends with the line break before the closing quotes,
+whose line's indentation has been read as indentation. The string is what comes
+before that line break. -}
+dropClosingLine : String -> String
+dropClosingLine str =
+    if String.endsWith "\n" str then
+        String.dropLast 1 str
+
+    else
+        str
+
+
+innerMultiLineString : Int -> Read -> Parser Context Error (Parser.Step Read Read)
+innerMultiLineString indent read =
+    let
+        nextLine short =
+            Parser.Loop { read | str = String.pushLast '\n' read.str, short = short }
+    in
+    Parser.oneOf
+        [ Parser.succeed {}
+            |> Parser.skip multiLineStrQuote
+            |> Parser.map (\_ -> Parser.Done read)
+        , Parser.succeed nextLine
+            |> Parser.skip
+                (Parser.oneOf
+                    [ Parser.chompChar '\n' ExpectedNewline
+                    , crlf
+                    ]
+                )
+            |> Parser.keep (lineIndentation indent)
+        , coreParser
+            |> Parser.andThen
+                (\c ->
+                    if read.short then
+                        Parser.problem MisalignedMultiQuotes
+
+                    else
+                        Parser.succeed (Parser.Loop (pushRead c read))
+                )
+        ]
+
+
+pushRead : { char : Char, unicode : Bool } -> Read -> Read
+pushRead c read =
+    { read
+        | str = String.pushLast c.char read.str
+        , codes =
+            if c.unicode && not (Array.member (Char.toCode c.char) read.codes) then
+                Array.pushLast (Char.toCode c.char) read.codes
+
+            else
+                read.codes
+    }
 
 
 innerSingleLineString : Parser Context Error {} -> Read -> Parser Context Error (Parser.Step Read Read)
@@ -289,17 +348,6 @@ innerSingleLineString endToken read =
             |> Parser.map (\_ -> Parser.Done read)
         , Parser.succeed (\_ -> Parser.Loop { read | str = String.pushLast '\n' read.str })
             |> Parser.keep crlf
-        , Parser.succeed
-            (\c ->
-                Parser.Loop
-                    { str = String.pushLast c.char read.str
-                    , codes =
-                        if c.unicode && not (Array.member (Char.toCode c.char) read.codes) then
-                            Array.pushLast (Char.toCode c.char) read.codes
-
-                        else
-                            read.codes
-                    }
-            )
+        , Parser.succeed (\c -> Parser.Loop (pushRead c read))
             |> Parser.keep coreParser
         ]
