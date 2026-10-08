@@ -21,6 +21,13 @@ tests =
                 Expect.all
                     [ \_ -> Expect.equal True (P.isCompatible P.Node P.Common)
                     , \_ -> Expect.equal True (P.isCompatible P.Browser P.Common)
+                    , \_ -> Expect.equal True (P.isCompatible P.Host P.Common)
+                    ]
+                    {}
+            , test "host is not node" <| \{} ->
+                Expect.all
+                    [ \_ -> Expect.equal False (P.isCompatible P.Host P.Node)
+                    , \_ -> Expect.equal False (P.isCompatible P.Node P.Host)
                     ]
                     {}
             ]

@@ -23,11 +23,16 @@ import Json.Decode as Decode exposing (Decoder)
 
 
 {-| You'll find this value in `gren.json`
+
+`Host` is a library a C, Go or Python program loads (geng-lang `m3-embed.md`
+D619): an application with no `main`, whose exports are the values its module
+exposes.
 -}
 type Platform
     = Node
     | Browser
     | Common
+    | Host
 
 
 {-| Check if two [Platform](#Platform) values are compatible.
@@ -47,6 +52,7 @@ toString platform =
         Common -> "common"
         Browser -> "browser"
         Node -> "node"
+        Host -> "host"
 
 
 {-| The [Platform](#Platform) a string names, the inverse of [toString](#toString).
@@ -57,6 +63,7 @@ fromString value =
         "common" -> Just Common
         "browser" -> Just Browser
         "node" -> Just Node
+        "host" -> Just Host
         _ -> Nothing
 
 
@@ -77,5 +84,6 @@ jsonDecoder =
                 "common" -> Decode.succeed Common
                 "browser" -> Decode.succeed Browser
                 "node" -> Decode.succeed Node
+                "host" -> Decode.succeed Host
                 _ -> Decode.fail (value ++ " is not a valid platform value")
         )

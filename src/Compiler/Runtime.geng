@@ -26,9 +26,10 @@ module Compiler.Runtime exposing
 A package declares the most general runtime it works on, and a build is
 compatible with it when the build's runtime is at or below that one. The
 compiler builds for `any`, `browser` and `node`, which are the three
-[Platform](Compiler.Platform#Platform)s, and for `beam` since D405 (geng-lang
-`m2-interop.md` §EI10), which the backend is told as `node`. A package may
-declare any of the nine.
+[Platform](Compiler.Platform#Platform)s it had before the hierarchy, for `beam`
+since D405 (geng-lang `m2-interop.md` §EI10), which the backend is told as
+`node`, and for `host` since D619 (`m3-embed.md`), which is a platform of its
+own. A package may declare any of the nine.
 
 @docs Runtime, parent, isAtOrBelow
 
@@ -133,6 +134,7 @@ fromPlatform platform =
         Platform.Common -> Any
         Platform.Browser -> Browser
         Platform.Node -> Node
+        Platform.Host -> Host
 
 
 {-| The platform the compiler builds a runtime as, if it builds for it.
@@ -146,6 +148,10 @@ native one's; `common` accepts none. Nothing of Node's reaches a `beam` or an
 substitution shows is the wire's `Program.runtime`, which says `node` for both,
 and nothing reads it.
 
+`host` is its own platform (D619, geng-lang `m3-embed.md`): a library has no
+`main`, as `common` has none, but its roots are the values its module exposes,
+each held to what crosses to C, and the backend has to be told that.
+
 `linux`, `darwin` and `windows` are not built: they are for packages below
 `os`, and there is none until the `os` package is (geng-lang `m3-native.md`
 §NA12).
@@ -158,6 +164,7 @@ toPlatform runtime =
         Node -> Just Platform.Node
         Beam -> Just Platform.Node
         Os -> Just Platform.Node
+        Host -> Just Platform.Host
         _ -> Nothing
 
 
@@ -175,11 +182,11 @@ person: the ones [isBuilt](#isBuilt) says yes to.
 -}
 built : Array Runtime
 built =
-    [ Any, Browser, Node, Beam, Os ]
+    [ Any, Browser, Node, Beam, Os, Host ]
 
 
 {-| [built](#built) as a sentence names it, for the messages that refuse a
-runtime: `any, browser, node, beam and os`.
+runtime: `any, browser, node, beam, os and host`.
 -}
 builtNames : String
 builtNames =
