@@ -309,14 +309,15 @@ isInner char =
 {-| Parse a keyword, and require that the source does not simply continue into
 a longer name: `type` in `typeOf` is not the keyword.
 
-`String.Parser.Advanced.keyword` already does that, but it decides where a word
+`String.Parser.Advanced.keyword` already does that, but it decided where a word
 ends with `Char.isAlphaNum`, which is ASCII by contract and is not what a Gren
 identifier is. Every non-ASCII letter therefore looked like the end of the
 keyword, and `typeé`, `typeｚ` and `type𝐚` were each split into a keyword and a
 remainder that then failed to parse — while the reference compiler accepts all
-three. The predicate is not a parameter of that function, so a caller whose
-identifiers reach past ASCII has to bring its own; this is it, over the same
-`isInner` that `lowerCase` and `upperCase` chomp with.
+three. `core`'s now ends a word at a letter or number in any script (geng-lang
+D641), which is still not a Gren name, since a name takes no digit above ASCII.
+The predicate is not a parameter of that function, so this parser brings its
+own, over the same `isInner` that `lowerCase` and `upperCase` chomp with.
 
     String.Parser.run (keyword "type" Nope) Compiler.Parse.Context.empty source
 -}
