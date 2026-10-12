@@ -121,14 +121,14 @@ parser =
                                 |> Parser.skip spaceParser
                                 |> Parser.keep
                                     (Parser.loop
-                                        { currentTerm = firstTerm, currentArgs = [], incompleteBinop = Nothing }
+                                        { currentTerm = firstTerm, currentArgs = Builder.empty 0, incompleteBinop = Nothing }
                                         argOrOperatorLoop
                                     )
                                 |> Parser.map
                                     (\state ->
                                         let
                                             finalExpression =
-                                                toCall state.currentTerm state.currentArgs
+                                                toCall state.currentTerm (Builder.toArray state.currentArgs)
                                         in
                                         when state.incompleteBinop is
                                             Just incomplete ->
@@ -176,7 +176,7 @@ blockParser =
 
 type alias ArgOrOperatorState =
     { currentTerm : AST.Expression
-    , currentArgs : Array AST.Expression
+    , currentArgs : Builder AST.Expression
     , incompleteBinop : Maybe { left : AST.Expression, operator : SourcePosition.Located String }
     }
 
@@ -228,16 +228,20 @@ rightOperand operator state =
         ]
 
 
+{-| The arguments are a Builder, as the other loops' are: pushing each onto an
+Array copied it, which made a call of n arguments quadratic to parse (geng-lang
+m3-sweep.md §SW37). A state is stepped once, after its step has succeeded.
+-}
 pushStateArg : AST.Expression -> ArgOrOperatorState -> ArgOrOperatorState 
 pushStateArg arg state =
-    { state | currentArgs = Array.pushLast arg state.currentArgs }
+    { state | currentArgs = Builder.pushLast arg state.currentArgs }
 
 
 pushStateOperator : AST.Expression -> SourcePosition.Located String -> ArgOrOperatorState -> ArgOrOperatorState 
 pushStateOperator expr operator state =
     let
         leftExpression =
-            toCall state.currentTerm state.currentArgs
+            toCall state.currentTerm (Builder.toArray state.currentArgs)
         
         binopExpression =
             SourcePosition.at
@@ -253,7 +257,7 @@ pushStateOperator expr operator state =
     when state.incompleteBinop is
         Just existingBinop ->
             { currentTerm = expr
-            , currentArgs = []
+            , currentArgs = Builder.empty 0
             , incompleteBinop =
                 Just <|
                     { left =
@@ -272,7 +276,7 @@ pushStateOperator expr operator state =
         
         Nothing ->
             { currentTerm = expr
-            , currentArgs = []
+            , currentArgs = Builder.empty 0
             , incompleteBinop =
                 Just
                     { left = leftExpression
