@@ -60,6 +60,7 @@ type Error
     | StringError String.Error
     | SpaceError Space.Error
     | IndentationError
+    | ExpectedColumnOne
     | UnknownAttribute String
     | AttributeNotOnCustomType
     | InlineNotOnValue
@@ -97,6 +98,9 @@ errorToString error =
 
         IndentationError ->
             "Expected more indentation than above line"
+
+        ExpectedColumnOne ->
+            "Expected to find a declaration here"
 
         UnknownAttribute name ->
             "Unknown attribute '@" ++ name ++ "'"
@@ -139,6 +143,8 @@ parser =
             }
         )
         |> Parser.keep (docParser ExpectedKeyword)
+        -- A declaration, and an attribute above one, start at column 1.
+        |> Parser.skip (Space.checkStartOfLine ExpectedColumnOne)
         -- Where the declaration itself begins, after any documentation comment.
         -- It cannot be recovered from the declaration's name: `type`,
         -- `type alias` and `port` all put a keyword first, and a newline
@@ -320,7 +326,7 @@ attributeParser =
 
 
 {-| The end of an attribute with no arguments: the fresh line the declaration
-starts on, as `attributeArgsParser` requires after the others.
+starts on, at column 1, as `attributeArgsParser` requires after the others.
 -}
 bareAttributeEndParser : Parser Context Error {}
 bareAttributeEndParser =
@@ -336,10 +342,11 @@ bareAttributeEndParser =
                 else
                     Parser.succeed {}
             )
+        |> Parser.skip (Space.checkStartOfLine AttributeNeedsFreshLine)
 
 
 {-| `(`, the attribute's own argument, `)`, and then the fresh line the
-declaration starts on.
+declaration starts on, at column 1.
 -}
 attributeArgsParser : Parser Context Error a -> Parser Context Error a
 attributeArgsParser argsParser =
@@ -362,6 +369,7 @@ attributeArgsParser argsParser =
                 else
                     Parser.succeed args
             )
+        |> Parser.skip (Space.checkStartOfLine AttributeNeedsFreshLine)
 
 
 {-| The primitive's name, as a string literal, and then the closing paren that

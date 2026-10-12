@@ -188,6 +188,13 @@ tests =
                                     )
                             }
                         )
+            , test "Should fail if it doesn't start at col 1" <| \_ ->
+                Run.run PD.parser Context.empty
+                    """
+                    {-| docs -}
+                      type alias Person = Worker
+                    """
+                    |> expectErr PD.ExpectedColumnOne
             ]
         , describe "type union"
             [ test "Simple case" <| \_ ->
@@ -330,6 +337,32 @@ tests =
                                 ]
                             }
                         )
+            , test "Should fail if it doesn't start at col 1" <| \_ ->
+                Run.run PD.parser Context.empty
+                    """
+                    {-| docs -}
+                      type Person
+                        = Worker
+                    """
+                    |> expectErr PD.ExpectedColumnOne
+            , test "Should fail if its attribute doesn't start at col 1" <| \_ ->
+                Run.run PD.parser Context.empty
+                    """
+                    {-| docs -}
+                     @derive(Eq)
+                    type Person
+                        = Worker
+                    """
+                    |> expectErr PD.ExpectedColumnOne
+            , test "Should fail if it doesn't start at col 1 under an attribute" <| \_ ->
+                Run.run PD.parser Context.empty
+                    """
+                    {-| docs -}
+                    @derive(Eq)
+                     type Person
+                        = Worker
+                    """
+                    |> expectErr PD.AttributeNeedsFreshLine
             ]
         , describe "Values"
             [ test "Simple case" <| \_ ->
@@ -574,6 +607,21 @@ tests =
                                     )
                             }
                         )
+            , test "Should fail if it doesn't start at col 1" <| \_ ->
+                Run.run PD.parser Context.empty
+                    """
+                    {-| docs -}
+                     person = 1
+                    """
+                    |> expectErr PD.ExpectedColumnOne
+            , test "Should fail if type doesn't start at col 1" <| \_ ->
+                Run.run PD.parser Context.empty
+                    """
+                    {-| docs -}
+                     person : Int
+                    person = 1
+                    """
+                    |> expectErr PD.ExpectedColumnOne
             ]
         , describe "Ports"
             [ test "a `port` declaration is not a declaration any more (D279)" <| \_ ->
@@ -654,3 +702,17 @@ expectDoc expectedDocs expectedValue result =
                 , value = decl.value
                 }
 
+
+expectErr : PD.Error -> Result (Array (Run.DeadEnd PD.Error)) PD.Declaration -> Expectation
+expectErr expected result =
+    when result is
+        Ok _ ->
+            Expect.fail "Expected error"
+
+        Err problems ->
+            when Array.first problems is
+                Just firstProblem ->
+                    Expect.equal expected firstProblem.problem
+
+                Nothing ->
+                    Expect.fail "Failed, but with no problems..."

@@ -4,6 +4,7 @@ module Compiler.Parse.Space exposing
     , scopeIndentToLineStart
     , scopeIndentToColumn
     , checkIndent
+    , checkStartOfLine
     , errorToString
     , isBidiControl
     , firstBidiControl
@@ -264,4 +265,19 @@ checkIndent =
 
                 else
                     Parser.problem {}
+            )
+
+
+{-| Check that we're at the start of a line
+-}
+checkStartOfLine : err -> Parser Context err {}
+checkStartOfLine err =
+    Parser.getCol
+        |> Parser.andThen
+            (\col ->
+                if col == 1 then
+                    Parser.succeed {}
+
+                else
+                    Parser.problem err
             )
