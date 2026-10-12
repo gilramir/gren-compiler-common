@@ -5,6 +5,8 @@ import Expect exposing (Expectation)
 import Test exposing (Test, describe, test, fuzz)
 import String.Parser.Advanced as Parser
 import Compiler.Parse.Declaration as PD
+import Compiler.Parse.Expression as Expr
+import Compiler.Parse.Variable as Var
 import Compiler.SourcePosition as SourcePosition
 import Compiler.Ast.Source as AST
 import Compiler.Parse.Context as Context
@@ -622,6 +624,29 @@ tests =
                     person = 1
                     """
                     |> expectErr PD.ExpectedColumnOne
+            , test "Should fail if impl doesn't start at col 1 (upstream 4d2d37f)" <| \_ ->
+                Run.run PD.parser Context.empty
+                    """
+                    {-| docs -}
+                    person : Int
+                     person = 1
+                    """
+                    |> expectErr (PD.ExprError (Expr.VariableError Var.InvalidCharacter))
+            , test "Should fail if impl is glued behind a block comment (D685)" <| \_ ->
+                Run.run PD.parser Context.empty
+                    """
+                    person : Int
+                    {- c -} person = 1
+                    """
+                    |> expectErr (PD.ExprError (Expr.VariableError Var.InvalidCharacter))
+            , test "a block comment on its own row between type and impl is fine" <| \_ ->
+                Run.run PD.parser Context.empty
+                    """
+                    person : Int
+                    {- c -}
+                    person = 1
+                    """
+                    |> Expect.ok
             ]
         , describe "Ports"
             [ test "a `port` declaration is not a declaration any more (D279)" <| \_ ->

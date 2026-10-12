@@ -100,6 +100,24 @@ tests =
                 effect module CmdModule where { command = MyCmd } exposing (..)
                 """
                 |> expectRefused "effect module"
+        , test "an import starts at column 1, as `gren make` has it (D685)" <| \_ ->
+            Run.run PM.parser Context.empty "module M exposing (..)\n\n  import Dict\n"
+                |> expectProblem PM.ImportNotAtColumnOne
+        , test "a second import starts at column 1 (D685)" <| \_ ->
+            Run.run PM.parser Context.empty "module M exposing (..)\n\nimport Dict\n   import Set\n"
+                |> expectProblem PM.ImportNotAtColumnOne
+        , test "an import glued behind a block comment is not at column 1 (D685)" <| \_ ->
+            Run.run PM.parser Context.empty "module M exposing (..)\n\n{- c -} import Dict\n"
+                |> expectProblem PM.ImportNotAtColumnOne
+        , test "a definition glued behind a block comment under its annotation is refused (D685)" <| \_ ->
+            Run.run PM.parser Context.empty "module M exposing (..)\n\n\nfoo : a\n{- c -} foo =\n    1\n"
+                |> expectRefusedModule
+        , test "a let definition glued behind a block comment under its annotation is refused (D685)" <| \_ ->
+            Run.run PM.parser Context.empty "module M exposing (..)\n\n\nfoo =\n    let\n        x : a\n        {- c -} x =\n            1\n    in\n    x\n"
+                |> expectRefusedModule
+        , test "a block comment on its own row above an import is fine" <| \_ ->
+            Run.run PM.parser Context.empty "module M exposing (..)\n\n{- c -}\nimport Dict\n"
+                |> expectOk
         , test "Docs" <| \_ ->
             Run.run PM.parser Context.empty
                 """
@@ -1097,6 +1115,26 @@ expectRefused header result =
 
         Ok _ ->
             Expect.fail ("a `" ++ header ++ "` was accepted")
+
+
+expectProblem : PM.Error -> Result (Array (Run.DeadEnd PM.Error)) a -> Expectation
+expectProblem problem result =
+    when result is
+        Err deadEnds ->
+            Expect.equal True (Array.any (\deadEnd -> deadEnd.problem == problem) deadEnds)
+
+        Ok _ ->
+            Expect.fail "the module was accepted"
+
+
+expectRefusedModule : Result (Array (Run.DeadEnd PM.Error)) a -> Expectation
+expectRefusedModule result =
+    when result is
+        Err _ ->
+            Expect.pass
+
+        Ok _ ->
+            Expect.fail "the module was accepted"
 
 
 expectOk : Inspect e => Result (Array (Run.DeadEnd e)) a -> Expectation

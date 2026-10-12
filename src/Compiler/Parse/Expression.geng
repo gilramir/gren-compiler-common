@@ -41,6 +41,7 @@ type Error
     | WildcardAttempt
     | ExpectedLowerVariable AST.Expression
     | NameMismatch { first : String, second : String }
+    | DefinitionNotUnderAnnotation String
     | IndentError
     | BadOperator String
     | InvalidOperatorChar
@@ -83,6 +84,9 @@ errorToString error =
         
         NameMismatch { first, second } ->
             "Name mismatch: expected '" ++ first ++ "' but got '" ++ second ++ "'"
+
+        DefinitionNotUnderAnnotation name ->
+            "Expected the definition of '" ++ name ++ "' to start in the column its type annotation does"
         
         IndentError ->
             "Indentation error"
@@ -399,6 +403,12 @@ letDefNamedParser =
                                                             { first = var.value
                                                             , second = var2.value
                                                             }
+
+                                                -- `gren make` holds the definition to the
+                                                -- column of its annotation's name
+                                                -- (geng-lang `m3-sweep.md` D685).
+                                                else if var2.start.col /= var.start.col then
+                                                    Parser.problem (DefinitionNotUnderAnnotation var.value)
 
                                                 else
                                                     Parser.succeed var2

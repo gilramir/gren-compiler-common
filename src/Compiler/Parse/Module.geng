@@ -40,6 +40,7 @@ type Error
     | ExpectedEnd
     | InvalidModuleName String
     | RemovedModuleHeader String
+    | ImportNotAtColumnOne
 
 
 {-| Returns a human-readable description of an `Error`.
@@ -73,6 +74,9 @@ errorToString error =
 
         InvalidModuleName name ->
             "Invalid module name '" ++ name ++ "': a module name is a capital letter followed by ASCII letters and digits, in each part"
+
+        ImportNotAtColumnOne ->
+            "Expected this import to start at column 1"
 
         RemovedModuleHeader header ->
             "This module's header is `" ++ header ++ "`, and Geng has no such modules: a call into JavaScript is an `@extern` that answers a `Task`, and events the host produces arrive through a `Source`"
@@ -364,8 +368,7 @@ importLoopParser imps =
             -- The `import` keyword's own position, not the module name's row
             -- forced to column 1: a newline between the keyword and the name
             -- is legal, and then the two are not on the same row.
-            |> Parser.keep Parser.getPosition
-            |> Parser.skip (Variable.keyword "import" (ExpectedKeyword "import"))
+            |> Parser.keep importKeywordParser
             |> Parser.skip spaceParser
             |> Parser.keep moduleNameParser
             |> Parser.skip spaceParser
@@ -424,6 +427,26 @@ importLoopParser imps =
         , Parser.succeed {}
             |> Parser.map (\_ -> Parser.Done (Builder.toArray imps))
         ]
+
+
+{-| The `import` keyword, which starts at column 1, as `gren make` has it, and
+as a declaration does since upstream's 4d2d37f (geng-lang `m3-sweep.md` D685).
+The column is checked once the keyword is read, so an import that does not
+start there is refused as an import, where a check before it would end the
+imports and leave the keyword to the declaration parser.
+-}
+importKeywordParser : Parser Context Error { row : Int, col : Int }
+importKeywordParser =
+    Parser.getPosition
+        |> Parser.skip (Variable.keyword "import" (ExpectedKeyword "import"))
+        |> Parser.andThen
+            (\start ->
+                if start.col == 1 then
+                    Parser.succeed start
+
+                else
+                    Parser.problem ImportNotAtColumnOne
+            )
 
 
 operatorLoopParser
