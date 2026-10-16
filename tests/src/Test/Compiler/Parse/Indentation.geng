@@ -146,6 +146,62 @@ tests =
                 """
                     |> expression
                     |> Expect.equal (Ok "when a [X -> g, Y -> h]")
+            , test "an argument left of its function but right of the definition" <| \{} ->
+                -- The Haskell parser holds an argument to the definition's
+                -- column, not to its function's: upstream 37df278 scopes a body
+                -- to its own column and refuses these three, which `gren make`
+                -- compiles.
+                """
+                f =
+                    g 1
+                  2
+                """
+                    |> declaration
+                    |> Expect.equal (Ok "f = g(1, 2)")
+            , test "the same in a let" <| \{} ->
+                """
+                f =
+                    let
+                        b =
+                            g 1
+                          2
+                    in
+                    b
+                """
+                    |> declaration
+                    |> Expect.equal (Ok "f = let [b = g(1, 2)] b")
+            , test "the same in a branch" <| \{} ->
+                """
+                when s is
+                    Just q ->
+                        g q
+                      2
+
+                    Nothing ->
+                        0
+                """
+                    |> expression
+                    |> Expect.equal (Ok "when s [Just -> g(q, 2), Nothing -> 0]")
+            , test "a branch's body at the branches' column is refused (upstream 37df278)" <| \{} ->
+                """
+                when myVar is
+                    A ->
+                    'a'
+                    B ->
+                   'b'
+                """
+                    |> expression
+                    |> Expect.equal (Err "refused")
+            , test "a definition's body at its name's column is refused, on the let's row too" <| \{} ->
+                """
+                f =
+                    let a =
+                        1
+                    in
+                    a
+                """
+                    |> declaration
+                    |> Expect.equal (Err "refused")
             ]
         , describe "a block: `if`, `when`, `let` or a lambda"
             [ test "a token left of a `when`'s branches is not an argument of the `when`" <| \{} ->
@@ -334,6 +390,23 @@ show expr =
 
         AST.Lambda { patterns, body } ->
             "\\" ++ String.join " " (Array.map pattern patterns) ++ " -> " ++ show body
+
+        AST.Let { defs, body } ->
+            "let ["
+                ++ String.join ", "
+                    (Array.map
+                        (\d ->
+                            when d.value is
+                                AST.Define r ->
+                                    r.name.value ++ " = " ++ show r.body
+
+                                _ ->
+                                    "?"
+                        )
+                        defs
+                    )
+                ++ "] "
+                ++ show body
 
         AST.When when_ ->
             "when "

@@ -691,6 +691,31 @@ tests =
                                     (AST.Var { name = "b", varType = AST.LowVar })
                             }
                         )
+            , test "subtraction where right operand happens to have operator column + 1 (upstream c0dc2ea)" <| \_ ->
+                Run.run PE.parser Context.empty
+                    """
+                    a -
+                       b
+                    """
+                    |> expectExpression
+                        (AST.Binops
+                            { left =
+                                SourcePosition.at
+                                    { row = 1, col = 1 }
+                                    { row = 1, col = 2 }
+                                    (AST.Var { name = "a", varType = AST.LowVar })
+                            , operator =
+                                SourcePosition.at
+                                    { row = 1, col = 3 }
+                                    { row = 1, col = 4 }
+                                    "-"
+                            , right =
+                                SourcePosition.at
+                                    { row = 2, col = 4 }
+                                    { row = 2, col = 5 }
+                                    (AST.Var { name = "b", varType = AST.LowVar })
+                            }
+                        )
             , test "pipe operator over multiple lines with indent" <| \_ ->
                 Run.run PE.parser Context.empty
                     """
@@ -1681,6 +1706,123 @@ tests =
                                         (AST.Var { name = "num", varType = AST.LowVar })
                                 }
                             )
+                , test "Nested case: a let ends where its body ends (upstream 0b478c7)" <| \_ ->
+                    Run.run PE.parser Context.empty
+                        """
+                        let
+                            inner =
+                                let n = 1 in
+                                n
+
+                            num =
+                                1
+                        in
+                        num
+                        """
+                        |> expectExpression
+                            (AST.Let
+                                { defs =
+                                    [ SourcePosition.at
+                                        { row = 2, col = 5 }
+                                        { row = 4, col = 10 }
+                                        (AST.Define
+                                            { name =
+                                                SourcePosition.at
+                                                    { row = 2, col = 5 }
+                                                    { row = 2, col = 10 }
+                                                    "inner"
+                                            , args = []
+                                            , typeSignature = Nothing
+                                            , body =
+                                                SourcePosition.at
+                                                    { row = 3, col = 9 }
+                                                    { row = 4, col = 10 }
+                                                    (AST.Let
+                                                        { defs =
+                                                            [ SourcePosition.at
+                                                                { row = 3, col = 13 }
+                                                                { row = 3, col = 18 }
+                                                                (AST.Define
+                                                                    { name =
+                                                                        SourcePosition.at
+                                                                            { row = 3, col = 13 }
+                                                                            { row = 3, col = 14 }
+                                                                            "n"
+                                                                    , args = []
+                                                                    , typeSignature = Nothing
+                                                                    , body =
+                                                                        SourcePosition.at
+                                                                            { row = 3, col = 17 }
+                                                                            { row = 3, col = 18 }
+                                                                            (AST.NumberLiteral (Number.Integer { text = "1" }))
+                                                                    }
+                                                                )
+                                                            ]
+                                                        , body =
+                                                            SourcePosition.at
+                                                                { row = 4, col = 9 }
+                                                                { row = 4, col = 10 }
+                                                                (AST.Var { name = "n", varType = AST.LowVar })
+                                                        }
+                                                    )
+                                            }
+                                        )
+                                    , SourcePosition.at
+                                        { row = 6, col = 5 }
+                                        { row = 7, col = 10 }
+                                        (AST.Define
+                                            { name =
+                                                SourcePosition.at
+                                                    { row = 6, col = 5 }
+                                                    { row = 6, col = 8 }
+                                                    "num"
+                                            , args = []
+                                            , typeSignature = Nothing
+                                            , body =
+                                                SourcePosition.at
+                                                    { row = 7, col = 9 }
+                                                    { row = 7, col = 10 }
+                                                    (AST.NumberLiteral (Number.Integer { text = "1" }))
+                                            }
+                                        )
+                                    ]
+                                , body =
+                                    SourcePosition.at
+                                        { row = 9, col = 1 }
+                                        { row = 9, col = 4 }
+                                        (AST.Var { name = "num", varType = AST.LowVar })
+                                }
+                            )
+                , test "Values must be indented in line with name (upstream 37df278)" <| \_ ->
+                    Run.run PE.parser Context.empty
+                        """
+                        let
+                            number =
+                        1
+                        in
+                        number
+                        """
+                        |> expectRefused
+                , test "Values must be indented in line with function name (upstream 37df278)" <| \_ ->
+                    Run.run PE.parser Context.empty
+                        """
+                        let
+                            number a =
+                        foo
+                        in
+                        number
+                        """
+                        |> expectRefused
+                , test "A destructuring's value must be to the right of its pattern" <| \_ ->
+                    Run.run PE.parser Context.empty
+                        """
+                        let
+                            { a } =
+                          r
+                        in
+                        a
+                        """
+                        |> expectRefused
                 , test "With function" <| \_ ->
                     Run.run PE.parser Context.empty
                         """
@@ -1869,6 +2011,15 @@ tests =
                     |> expectOk
             , test "a lambda argument whose name merely starts with `as`" <| \_ ->
                 Run.run PE.parser Context.empty "\\x as_ -> as_"
+                    |> expectOk
+            , test "a lambda argument takes no unparenthesized alias (upstream 8548e21)" <| \_ ->
+                Run.run PE.parser Context.empty "\\x as y -> y"
+                    |> expectRefused
+            , test "a definition's argument takes no unparenthesized alias (upstream 8548e21)" <| \_ ->
+                Run.run PE.parser Context.empty "let\n    f x as y =\n        y\nin\nf"
+                    |> expectRefused
+            , test "a parenthesized argument can be aliased" <| \_ ->
+                Run.run PE.parser Context.empty "\\(x as y) -> y"
                     |> expectOk
             , test "a when branch pattern aliased without parens" <| \_ ->
                 Run.run PE.parser Context.empty "when x is\n    Just y as whole ->\n        whole"

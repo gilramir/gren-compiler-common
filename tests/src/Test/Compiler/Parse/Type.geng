@@ -54,6 +54,68 @@ tests =
                             ]
                         }
                     )
+        , test "A type's arguments are terms, so an arrow after them is not in the last one" <| \_ ->
+            Run.run PT.expression Context.empty "Dict String Int -> Int"
+                |> expectExpression
+                    (AST.TLambda
+                        { from =
+                            SourcePosition.at
+                                { row = 1, col = 1 }
+                                { row = 1, col = 16 }
+                                (AST.TType
+                                    { name =
+                                        SourcePosition.at
+                                            { row = 1, col = 1 }
+                                            { row = 1, col = 5 }
+                                            "Dict"
+                                    , args =
+                                        [ SourcePosition.at
+                                            { row = 1, col = 6 }
+                                            { row = 1, col = 12 }
+                                            (AST.TType
+                                                { name =
+                                                    SourcePosition.at
+                                                        { row = 1, col = 6 }
+                                                        { row = 1, col = 12 }
+                                                        "String"
+                                                , args = []
+                                                }
+                                            )
+                                        , SourcePosition.at
+                                            { row = 1, col = 13 }
+                                            { row = 1, col = 16 }
+                                            (AST.TType
+                                                { name =
+                                                    SourcePosition.at
+                                                        { row = 1, col = 13 }
+                                                        { row = 1, col = 16 }
+                                                        "Int"
+                                                , args = []
+                                                }
+                                            )
+                                        ]
+                                    }
+                                )
+                        , to =
+                            SourcePosition.at
+                                { row = 1, col = 20 }
+                                { row = 1, col = 23 }
+                                (AST.TType
+                                    { name =
+                                        SourcePosition.at
+                                            { row = 1, col = 20 }
+                                            { row = 1, col = 23 }
+                                            "Int"
+                                    , args = []
+                                    }
+                                )
+                        }
+                    )
+        , test "A name given two arguments is not a name given one applied to the other" <| \_ ->
+            Run.run PT.expression Context.empty "Maybe Maybe Int"
+                |> Result.map argCount
+                |> Result.mapError (\_ -> {})
+                |> Expect.equal (Ok 2)
         , test "Qualified Type" <| \_ ->
             Run.run PT.expression Context.empty "Main.Module.MyType"
                 |> expectExpression
@@ -310,3 +372,13 @@ expectLocatedExpression expected result =
 
         Ok value ->
             Expect.equal expected value
+
+
+argCount : AST.Type -> Int
+argCount t =
+    when t.value is
+        AST.TType { args } ->
+            Array.length args
+
+        _ ->
+            -1

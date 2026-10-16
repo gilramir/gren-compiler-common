@@ -1,6 +1,7 @@
 module Compiler.Parse.Type exposing
     ( Error (..)
     , expression
+    , term
     , annotation
     , errorToString
     )
@@ -8,7 +9,7 @@ module Compiler.Parse.Type exposing
 
 {-| This module provides parsers for Gren type expressions.
 
-@docs expression, annotation, Error, errorToString
+@docs expression, term, annotation, Error, errorToString
 -}
 
 
@@ -213,15 +214,22 @@ app =
 typeArgsParser : Builder AST.Type -> Parser Context Error (Parser.Step (Builder AST.Type) (Array AST.Type))
 typeArgsParser array =
     Parser.oneOf
+        -- Each argument is a term, as the Haskell parser has it: read as a whole
+        -- type, `Dict String Int -> Int` was `Dict (String (Int -> Int))` and
+        -- `Maybe Maybe Int` was `Maybe (Maybe Int)`, which `gren make` reads as
+        -- `Maybe` given two arguments (compiler-common#32's cause).
         [ Parser.succeed (\expr -> Parser.Loop (Builder.pushLast expr array))
             |> Parser.skip (Parser.mapError (\_ -> ExpectedIndent) Space.checkIndent)
-            |> Parser.keep expression
+            |> Parser.keep term
             |> Parser.skip spaceParser
         , Parser.succeed {}
             |> Parser.map (\_ -> Parser.Done (Builder.toArray array))
         ]
 
 
+{-| A type that needs no parentheses to be an argument: a name with no
+arguments, a variable, a record or a parenthesized type.
+-}
 term : Parser Context Error AST.Type
 term =
     Parser.getPosition

@@ -872,9 +872,12 @@ variantParser =
         |> Parser.skip spaceParser
         |> Parser.keep
             (Parser.oneOf
+                -- A variant takes at most one argument, a term (upstream
+                -- e149122, compiler-common#32): `Person String Int` is refused
+                -- here, as `gren make` refuses it.
                 [ Parser.succeed Just
                     |> Parser.skip (Parser.mapError (\_ -> IndentationError) Space.checkIndent)
-                    |> Parser.keep (Parser.mapError TypeError Type.expression)
+                    |> Parser.keep (Parser.mapError TypeError Type.term)
                 , Parser.succeed Nothing
                 ]
             )

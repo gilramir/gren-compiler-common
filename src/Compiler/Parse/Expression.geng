@@ -197,8 +197,10 @@ argOrOperatorLoop state =
                         Parser.getPosition
                             |> Parser.andThen
                                 (\pos ->
-                                    if operator.end.col == pos.col then
-                                        -- negated term (no space after operator)
+                                    -- A negation only when the term is tight against the `-` on its
+                                    -- row: an operand on a later row that happens to start one column
+                                    -- past it is subtraction (upstream c0dc2ea, compiler-common#35).
+                                    if operator.end.col == pos.col && operator.end.row == pos.row then
                                         Parser.succeed (\term_ -> Parser.Loop <| pushStateArg (SourcePosition.at operator.start term_.end (AST.Negate term_)) state)
                                             |> Parser.skip checkIndent
                                             |> Parser.keep term
@@ -319,10 +321,12 @@ operatorParser =
 letParser : Parser Context Error AST.Expression
 letParser =
     Parser.succeed
-        (\start firstDef defs body end ->
+        (\start firstDef defs body ->
+            -- The body's end, not the position after the space that follows it
+            -- (upstream 0b478c7, compiler-common#13).
             SourcePosition.at
                 start
-                end
+                body.end
                 (AST.Let
                     { defs = Array.pushFirst firstDef defs
                     , body = body
@@ -337,7 +341,6 @@ letParser =
         |> Parser.keep (Parser.loop (Builder.empty 0) letDefLoopParser)
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.lazy (\_ -> parser))
-        |> Parser.keep Parser.getPosition
 
 
 letDefParser : Parser Context Error (SourcePosition.Located AST.Def)
@@ -425,6 +428,9 @@ letDefNamedParser =
                         (\nextValue payload -> { payload | indent = nextValue })
                     |> Parser.keep (Parser.loop (Builder.empty 0) (functionArgsParser "="))
                     |> Parser.skip spaceParser
+                    -- The body is to the right of the definition's name, as `gren
+                    -- make` holds it (upstream 37df278).
+                    |> Parser.skip (rightOf var.start.col)
                     |> Parser.keep (Parser.lazy (\_ -> parser))
             )
 
@@ -442,22 +448,28 @@ defArgsAndBodyParser =
 
 letDefDestructParser : Parser Context Error (SourcePosition.Located AST.Def)
 letDefDestructParser =
-    Parser.succeed
-        (\pattern body ->
-            SourcePosition.at
-                pattern.start
-                body.end
-                (AST.Destruct
-                    { pattern = pattern
-                    , body = body
-                    }
-                )
-        )
+    Parser.succeed identity
         |> Parser.keep (Parser.mapError PatternError Pattern.parser)
         |> Parser.skip spaceParser
         |> Parser.skip (Parser.chompChar '=' (ExpectedChar '='))
         |> Parser.skip spaceParser
-        |> Parser.keep (Parser.lazy (\_ -> parser))
+        |> Parser.andThen
+            (\pattern ->
+                Parser.succeed
+                    (\body ->
+                        SourcePosition.at
+                            pattern.start
+                            body.end
+                            (AST.Destruct
+                                { pattern = pattern
+                                , body = body
+                                }
+                            )
+                    )
+                    -- To the right of the pattern, as a named definition's body is.
+                    |> Parser.skip (rightOf pattern.start.col)
+                    |> Parser.keep (Parser.lazy (\_ -> parser))
+            )
 
 
 letDefLoopParser : Builder (SourcePosition.Located AST.Def) -> Parser Context Error (Parser.Step (Builder (SourcePosition.Located AST.Def)) (Array (SourcePosition.Located AST.Def)))
@@ -580,6 +592,9 @@ whenBranchParser =
         -- next character is alphanumeric, which rejects `_ ->x`.
         |> Parser.skip (Parser.token "->" (ExpectedKeyword "->"))
         |> Parser.skip spaceParser
+        -- To the right of the branches' column, which is the indentation here
+        -- (upstream 37df278).
+        |> Parser.skip checkIndent
         |> Parser.keep (Parser.lazy (\_ -> parser))
 
 
@@ -625,7 +640,7 @@ function =
     Parser.succeed identity
         |> Parser.skip (Parser.chompChar '\\' (ExpectedChar '\\'))
         |> Parser.skip spaceParser
-        |> Parser.keep (Parser.mapError PatternError Pattern.parser)
+        |> Parser.keep (Parser.mapError PatternError Pattern.parserNoAlias)
         |> Parser.skip spaceParser
         |> Parser.andThen
             (\firstArg ->
@@ -649,7 +664,9 @@ functionArgsParser terminator array =
         [ Parser.token terminator (ExpectedKeyword terminator)
             |> Parser.map (\_ -> Parser.Done (Builder.toArray array))
         , Parser.succeed (\expr -> Parser.Loop (Builder.pushLast expr array))
-            |> Parser.keep (Parser.mapError PatternError Pattern.parser)
+            -- An argument takes no `as` unless it is parenthesized, as `gren
+            -- make` holds it (upstream 8548e21).
+            |> Parser.keep (Parser.mapError PatternError Pattern.parserNoAlias)
             |> Parser.skip spaceParser
         ]
 
@@ -988,6 +1005,23 @@ innerRecordParser array =
 spaceParser : Parser Context Error {}
 spaceParser =
     Parser.mapError SpaceError Space.parser
+
+
+{-| Succeeds only to the right of the given column: a definition's body, which
+the Haskell parser holds to the right of the definition's own column, wherever
+the line it is on began.
+-}
+rightOf : Int -> Parser Context Error {}
+rightOf column =
+    Parser.getCol
+        |> Parser.andThen
+            (\col ->
+                if col > column then
+                    Parser.succeed {}
+
+                else
+                    Parser.problem IndentError
+            )
 
 
 checkIndent : Parser Context Error {}
