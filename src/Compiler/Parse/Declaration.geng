@@ -313,10 +313,10 @@ attributeParser =
                             Parser.map (\_ -> Inline_) bareAttributeEndParser
 
                         "extern" ->
-                            Parser.map Extern_ (attributeArgsParser (externArgsParser False))
+                            Parser.map Extern_ (attributeArgsParser (externArgsParser (attributeAt name) False))
 
                         "externPure" ->
-                            Parser.map Extern_ (attributeArgsParser (externArgsParser True))
+                            Parser.map Extern_ (attributeArgsParser (externArgsParser (attributeAt name) True))
 
                         _ ->
                             Parser.problem (UnknownAttribute name.value)
@@ -387,12 +387,20 @@ primNameParser =
         |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
 
 
+{-| Where an attribute's `@` is: the column before its name, which follows it
+with nothing between.
+-}
+attributeAt : SourcePosition.Located String -> SourcePosition.Position
+attributeAt name =
+    { row = name.start.row, col = name.start.col - 1 }
+
+
 {-| `js, "geng_time", "now")`: a language and its names, then the closing
 paren, as `primNameParser` ends on one.
 -}
-externArgsParser : Bool -> Parser Context Error AST.ExternImpl
-externArgsParser isPure =
-    Parser.succeed (\language names -> { pure = isPure, language = language, names = names })
+externArgsParser : SourcePosition.Position -> Bool -> Parser Context Error AST.ExternImpl
+externArgsParser at isPure =
+    Parser.succeed (\language names -> { at = at, pure = isPure, language = language, names = names })
         |> Parser.keep (SourcePosition.parser lowerCaseVariable)
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.loop (Builder.empty 0) externNamesLoopParser)
@@ -484,10 +492,10 @@ moreExternsLoopParser impls =
                 (\name ->
                     when name.value is
                         "extern" ->
-                            Parser.map (\impl -> Parser.Loop (Builder.pushLast impl impls)) (attributeArgsParser (externArgsParser False))
+                            Parser.map (\impl -> Parser.Loop (Builder.pushLast impl impls)) (attributeArgsParser (externArgsParser (attributeAt name) False))
 
                         "externPure" ->
-                            Parser.map (\impl -> Parser.Loop (Builder.pushLast impl impls)) (attributeArgsParser (externArgsParser True))
+                            Parser.map (\impl -> Parser.Loop (Builder.pushLast impl impls)) (attributeArgsParser (externArgsParser (attributeAt name) True))
 
                         _ ->
                             Parser.problem (AttributeAfterExtern name.value)

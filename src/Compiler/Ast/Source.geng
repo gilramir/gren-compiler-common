@@ -407,9 +407,12 @@ type alias Extern =
 
 
 {-| One attribute row: `@extern` or `@externPure`, a language, and its names.
+`at` is where its `@` is, which a comment inside the parentheses can put rows
+above the language.
 -}
 type alias ExternImpl =
-  { pure : Bool
+  { at : SourcePosition.Position
+  , pure : Bool
   , language : SourcePosition.Located String
   , names : Array (SourcePosition.Located String)
   }
