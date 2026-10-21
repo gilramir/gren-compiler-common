@@ -18,6 +18,8 @@ import String.Parser.Advanced as Parser exposing (Parser)
 import Compiler.SourcePosition as SourcePosition
 import Compiler.Ast.Source as AST
 import Compiler.Parse.Variable as Variable
+import Compiler.Parse.Number as Number
+import Compiler.Parse.Operator as Operator
 import Compiler.Parse.Space as Space
 import Array.Builder as Builder exposing (Builder)
 
@@ -30,6 +32,7 @@ type Error
     | VariableError Variable.Error
     | ExpectedIndent
     | SpaceError Space.Error
+    | BadRefinement
 
 
 {-| Returns a human-readable description of an `Error`.
@@ -51,6 +54,9 @@ errorToString error =
         
         SpaceError spaceError ->
             Space.errorToString spaceError
+
+        BadRefinement ->
+            "Expected a refinement's predicate: integer literals, argument names, a measure applied to a name, True, False, not, a unary -, parentheses, and + - * < <= > >= == /= && ||"
 
 
 spaceParser : Parser Context Error {}
@@ -262,17 +268,222 @@ term =
                     , Parser.succeed (\var end -> SourcePosition.at start end (AST.TVar var))
                         |> Parser.keep (Parser.mapError VariableError Variable.lowerCase)
                         |> Parser.keep Parser.getPosition
-                    , Parser.succeed (\expr end -> SourcePosition.at start end (AST.TParens expr))
+                    , Parser.succeed (\inner end -> SourcePosition.at start end inner)
                         |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
                         |> Parser.skip spaceParser
-                        |> Parser.keep expression
-                        |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+                        |> Parser.keep parenthesized
                         |> Parser.keep Parser.getPosition
                     , Parser.succeed (\record end -> SourcePosition.at start end record)
                         |> Parser.keep recordParser
                         |> Parser.keep Parser.getPosition
                     ]
                     |> Parser.skip spaceParser
+            )
+
+
+{-| What follows a `(` in a type: a named type, `(b : Bytes)` or
+`(i : Int where 0 <= i)` (geng-lang `m4-refine.md` D814), or a parenthesized
+one. A name followed by a colon is what tells them apart, since a type
+variable is never followed by one, so that much is backtrackable and
+`(a -> b)` costs one failed attempt.
+-}
+parenthesized : Parser Context Error AST.Type_
+parenthesized =
+    Parser.oneOf
+        [ named
+        , Parser.succeed AST.TParens
+            |> Parser.keep (Parser.lazy (\_ -> expression))
+            |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+        ]
+
+
+named : Parser Context Error AST.Type_
+named =
+    Parser.succeed
+        (\name tipe maybeRefinement ->
+            AST.TNamed { name = name, type_ = tipe, refinement = maybeRefinement }
+        )
+        |> Parser.keep namedHead
+        |> Parser.skip spaceParser
+        |> Parser.keep (Parser.lazy (\_ -> expression))
+        |> Parser.keep
+            (Parser.oneOf
+                [ Parser.succeed (\whereAt p -> Just { whereAt = whereAt, predicate = p })
+                    |> Parser.keep Parser.getPosition
+                    |> Parser.skip (Variable.keyword "where" (ExpectedString "where"))
+                    |> Parser.skip spaceParser
+                    |> Parser.keep predicate
+                , Parser.succeed Nothing
+                ]
+            )
+        |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+
+
+namedHead : Parser Context Error (SourcePosition.Located String)
+namedHead =
+    Parser.succeed identity
+        |> Parser.keep (SourcePosition.parser (Parser.mapError VariableError Variable.lowerCase))
+        |> Parser.skip spaceParser
+        |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
+        |> Parser.backtrackable
+
+
+
+-- PREDICATES
+
+
+{-| A refinement's predicate, read by its own grammar rather than by the
+expression parser, which imports this module (D815). It holds what D808
+allows: integer literals, names, a qualified function applied to one name (a
+measure, `Bytes.length b`), `True`, `False`, `not`, unary `-`, the operators
+`+ - * < <= > >= == /= && ||` and parentheses.
+
+The operators are read as a chain nested to the left, as the expression parser
+reads them, and are given their precedence where every chain is, so a
+predicate is the expression it would be anywhere else. That `a < b < c` does
+not type, or that a `*` needs a literal side, is for the checker to say.
+-}
+predicate : Parser Context Error AST.Expression
+predicate =
+    operand
+        |> Parser.andThen (\first -> Parser.loop first predicateChain)
+
+
+predicateChain : AST.Expression -> Parser Context Error (Parser.Step AST.Expression AST.Expression)
+predicateChain left =
+    Parser.oneOf
+        [ Parser.succeed
+            (\operator right ->
+                Parser.Loop
+                    (SourcePosition.at left.start
+                        right.end
+                        (AST.Binops { left = left, operator = operator, right = right })
+                    )
+            )
+            |> Parser.keep (SourcePosition.parser predicateOperator)
+            |> Parser.skip spaceParser
+            |> Parser.keep operand
+        , Parser.succeed (Parser.Done left)
+        ]
+
+
+predicateOperator : Parser Context Error String
+predicateOperator =
+    Operator.parser
+        |> Parser.mapError (\_ -> BadRefinement)
+        |> Parser.andThen
+            (\op ->
+                if Array.member op [ "+", "-", "*", "<", "<=", ">", ">=", "==", "/=", "&&", "||" ] then
+                    Parser.succeed op
+
+                else
+                    Parser.problem BadRefinement
+            )
+
+
+{-| One operand of a predicate, and the space after it. -}
+operand : Parser Context Error AST.Expression
+operand =
+    Parser.getPosition
+        |> Parser.andThen
+            (\start ->
+                Parser.oneOf
+                    [ Parser.succeed (\inner end -> SourcePosition.at start end (AST.Parens inner))
+                        |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
+                        |> Parser.skip spaceParser
+                        |> Parser.keep (Parser.lazy (\_ -> predicate))
+                        |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+                        |> Parser.keep Parser.getPosition
+                        |> Parser.skip spaceParser
+                    , Parser.succeed (\inner -> SourcePosition.at start inner.end (AST.Negate inner))
+                        |> Parser.skip (Parser.chompChar '-' BadRefinement)
+                        |> Parser.keep (Parser.lazy (\_ -> operand))
+                    , Parser.succeed (\number end -> SourcePosition.at start end (AST.NumberLiteral number))
+                        |> Parser.keep integer
+                        |> Parser.keep Parser.getPosition
+                        |> Parser.skip spaceParser
+                    , Parser.succeed identity
+                        |> Parser.keep (Parser.mapError VariableError Variable.lowerCase)
+                        |> Parser.andThen (\name -> lowerOperand start name)
+                    , Parser.succeed identity
+                        |> Parser.keep (Parser.mapError VariableError Variable.foreignVar)
+                        |> Parser.andThen (\var -> upperOperand start var)
+                    ]
+            )
+
+
+integer : Parser Context Error Number.Outcome
+integer =
+    Number.parser
+        |> Parser.mapError (\_ -> BadRefinement)
+        |> Parser.andThen
+            (\number ->
+                when number is
+                    Number.FloatingPoint _ ->
+                        Parser.problem BadRefinement
+
+                    _ ->
+                        Parser.succeed number
+            )
+
+
+{-| A name, or `not` and what it negates. -}
+lowerOperand : SourcePosition.Position -> String -> Parser Context Error AST.Expression
+lowerOperand start name =
+    Parser.succeed (\end -> SourcePosition.at start end (AST.Var { name = name, varType = AST.LowVar }))
+        |> Parser.keep Parser.getPosition
+        |> Parser.skip spaceParser
+        |> Parser.andThen
+            (\var ->
+                if name == "not" then
+                    Parser.succeed
+                        (\arg -> SourcePosition.at start arg.end (AST.Call { fn = var, args = [ arg ] }))
+                        |> Parser.keep (Parser.lazy (\_ -> operand))
+
+                else
+                    Parser.succeed var
+            )
+
+
+{-| `True`, `False`, or a measure applied to a name: `Bytes.length b`. -}
+upperOperand : SourcePosition.Position -> Variable.ForeignVar -> Parser Context Error AST.Expression
+upperOperand start var =
+    Parser.getPosition
+        |> Parser.andThen
+            (\end ->
+                when var is
+                    Variable.Unqualified name ->
+                        if name == "True" || name == "False" then
+                            Parser.succeed (SourcePosition.at start end (AST.Var { name = name, varType = AST.CapVar }))
+                                |> Parser.skip spaceParser
+
+                        else
+                            Parser.problem BadRefinement
+
+                    Variable.Qualified { module_, name } ->
+                        if String.popFirst name |> Maybe.map (\{ first } -> Char.isLower first) |> Maybe.withDefault False then
+                            let
+                                fn =
+                                    SourcePosition.at start end (AST.VarQual { varType = AST.LowVar, qualifier = module_, name = name })
+                            in
+                            Parser.succeed
+                                (\argStart argName argEnd ->
+                                    SourcePosition.at start
+                                        argEnd
+                                        (AST.Call
+                                            { fn = fn
+                                            , args = [ SourcePosition.at argStart argEnd (AST.Var { name = argName, varType = AST.LowVar }) ]
+                                            }
+                                        )
+                                )
+                                |> Parser.skip spaceParser
+                                |> Parser.keep Parser.getPosition
+                                |> Parser.keep (Parser.mapError VariableError Variable.lowerCase)
+                                |> Parser.keep Parser.getPosition
+                                |> Parser.skip spaceParser
+
+                        else
+                            Parser.problem BadRefinement
             )
 
 
