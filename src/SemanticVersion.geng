@@ -67,20 +67,20 @@ compare left right =
 -}
 fromString : String -> Maybe SemanticVersion
 fromString str =
-    let
-        parts =
-            str
-            |> String.split "."
-            |> Array.mapAndKeepJust String.toInt
-            |> Array.keepIf (\num -> num >= 0)
-    in
-    when parts is
-        [ major, minor, patch ] ->
-            Just
-                { major = major
-                , minor = minor
-                , patch = patch
-                }
+    -- Each part is read and refused on its own, where they were dropped
+    -- before three were asked for, so "1.2.3.x" was 1.2.3 (geng-lang
+    -- m4-refine.md §RF7.4; docs/upstream/compiler-common-semver-fromstring-drops-parts.md).
+    when Array.map String.toInt (String.split "." str) is
+        [ Just major, Just minor, Just patch ] ->
+            if major >= 0 && minor >= 0 && patch >= 0 then
+                Just
+                    { major = major
+                    , minor = minor
+                    , patch = patch
+                    }
+
+            else
+                Nothing
 
         _ ->
             Nothing

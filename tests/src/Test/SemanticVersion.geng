@@ -61,6 +61,10 @@ tests =
 
                     Nothing ->
                         Expect.pass
+            , test "a part that is not a number is refused, not dropped" <| \{} ->
+                Expect.equal
+                    [ Nothing, Nothing, Nothing, Nothing, Nothing ]
+                    (Array.map SV.fromString [ "1.2.3.x", "1.x.2.3", "1.2.3.", "1.-1.2.3", "x.1.2.3" ])
             ]
         , describe "compare"
             [ test "LT" <| \{} ->
