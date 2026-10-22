@@ -20,6 +20,23 @@ tests =
                     |> Maybe.map ModuleName.toString
                     |> Maybe.withDefault ""
                     |> Expect.equal "My.Nested.Module"
+            -- A module name is ASCII, since it is also a file name (geng-lang
+            -- D171). Upstream's 7e7211b takes these five; Geng refuses each.
+            , test "no non-ASCII capital" <| \_ ->
+                ModuleName.fromString "Åberg"
+                    |> Expect.equal Nothing
+            , test "no underscore" <| \_ ->
+                ModuleName.fromString "Slug_"
+                    |> Expect.equal Nothing
+            , test "no non-ASCII letter after the first" <| \_ ->
+                ModuleName.fromString "MiN_1_Øse"
+                    |> Expect.equal Nothing
+            , test "no emoji" <| \_ ->
+                ModuleName.fromString "Hey🫵"
+                    |> Expect.equal Nothing
+            , test "no titlecase letter" <| \_ ->
+                ModuleName.fromString "ǅa"
+                    |> Expect.equal Nothing
             , test "name must be capitalized" <| \{} ->
                 ModuleName.fromString "myModule"
                     |> Expect.equal Nothing
