@@ -8,7 +8,6 @@ import Compiler.Parse.Space as PS
 import Compiler.Parse.Context as Context exposing (Context)
 import Dict
 import Compiler.SourcePosition as SourcePosition
-import Array.Builder
 
 
 tests : Test
@@ -148,7 +147,7 @@ expectComment comment resultContext =
             Expect.fail ("Failed to parse with error: " ++ inspect err)
 
         Ok ctx ->
-            Expect.equal [ comment ] (Array.Builder.toArray ctx.comments)
+            Expect.equal [ comment ] ctx.comments
 
 
 expectLineStart : Inspect x => Int -> Result x Context -> Expectation

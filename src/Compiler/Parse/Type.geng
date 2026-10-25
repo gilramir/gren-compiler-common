@@ -21,7 +21,6 @@ import Compiler.Parse.Variable as Variable
 import Compiler.Parse.Number as Number
 import Compiler.Parse.Operator as Operator
 import Compiler.Parse.Space as Space
-import Array.Builder as Builder exposing (Builder)
 
 
 {-| The kind of errors that can happen while parsing types.
@@ -96,7 +95,7 @@ context =
                 [ Parser.succeed identity
                     |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
                     |> Parser.skip spaceParser
-                    |> Parser.keep (Parser.loop (Builder.empty 0) constraintLoopParser)
+                    |> Parser.keep (Parser.loop [] constraintLoopParser)
                 , constraint
                     |> Parser.map (\one -> [ one ])
                 ]
@@ -106,16 +105,16 @@ context =
         |> Parser.skip spaceParser
 
 
-constraintLoopParser : Builder AST.Constraint -> Parser Context Error (Parser.Step (Builder AST.Constraint) (Array AST.Constraint))
+constraintLoopParser : Array AST.Constraint -> Parser Context Error (Parser.Step (Array AST.Constraint) (Array AST.Constraint))
 constraintLoopParser constraints =
-    Parser.succeed (\one step -> step (Builder.pushLast one constraints))
+    Parser.succeed (\one step -> step (Array.pushLast one constraints))
         |> Parser.keep constraint
         |> Parser.keep
             (Parser.oneOf
                 [ Parser.succeed Parser.Loop
                     |> Parser.skip (Parser.chompChar ',' (ExpectedChar ','))
                     |> Parser.skip spaceParser
-                , Parser.succeed (\done -> Parser.Done (Builder.toArray done))
+                , Parser.succeed (\done -> Parser.Done done)
                     |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
                 ]
             )
@@ -214,22 +213,22 @@ app =
         |> Parser.keep (Parser.mapError VariableError Variable.foreignUpper)
         |> Parser.keep Parser.getPosition
         |> Parser.skip spaceParser
-        |> Parser.keep (Parser.loop (Builder.empty 0) typeArgsParser)
+        |> Parser.keep (Parser.loop [] typeArgsParser)
 
 
-typeArgsParser : Builder AST.Type -> Parser Context Error (Parser.Step (Builder AST.Type) (Array AST.Type))
+typeArgsParser : Array AST.Type -> Parser Context Error (Parser.Step (Array AST.Type) (Array AST.Type))
 typeArgsParser array =
     Parser.oneOf
         -- Each argument is a term, as the Haskell parser has it: read as a whole
         -- type, `Dict String Int -> Int` was `Dict (String (Int -> Int))` and
         -- `Maybe Maybe Int` was `Maybe (Maybe Int)`, which `gren make` reads as
         -- `Maybe` given two arguments (compiler-common#32's cause).
-        [ Parser.succeed (\expr -> Parser.Loop (Builder.pushLast expr array))
+        [ Parser.succeed (\expr -> Parser.Loop (Array.pushLast expr array))
             |> Parser.skip (Parser.mapError (\_ -> ExpectedIndent) Space.checkIndent)
             |> Parser.keep term
             |> Parser.skip spaceParser
         , Parser.succeed {}
-            |> Parser.map (\_ -> Parser.Done (Builder.toArray array))
+            |> Parser.map (\_ -> Parser.Done array)
         ]
 
 
@@ -511,7 +510,7 @@ recordParser =
                                     |> Parser.skip spaceParser
                                     |> Parser.andThen
                                         (\firstPair ->
-                                            Parser.loop (Builder.pushLast firstPair (Builder.empty 0)) innerRecordParser
+                                            Parser.loop [ firstPair ] innerRecordParser
                                         )
                                     |> Parser.map (\fields -> AST.TRecord { fields = fields, extending = Just var })
                                 , Parser.succeed identity
@@ -521,7 +520,7 @@ recordParser =
                                     |> Parser.skip spaceParser
                                     |> Parser.andThen
                                         (\expr ->
-                                            Parser.loop (Builder.pushLast { field = var, signature = expr } (Builder.empty 0)) innerRecordParser
+                                            Parser.loop [ { field = var, signature = expr } ] innerRecordParser
                                         )
                                     |> Parser.map (\fields -> AST.TRecord { fields = fields, extending = Nothing })
                                 ]
@@ -547,12 +546,12 @@ recordFieldParser =
         |> Parser.keep expression
 
 
-innerRecordParser : Builder AST.TRecordField -> Parser Context Error (Parser.Step (Builder AST.TRecordField) (Array AST.TRecordField))
+innerRecordParser : Array AST.TRecordField -> Parser Context Error (Parser.Step (Array AST.TRecordField) (Array AST.TRecordField))
 innerRecordParser array =
     Parser.oneOf
         [ Parser.chompChar '}' (ExpectedChar '}')
-            |> Parser.map (\_ -> Parser.Done (Builder.toArray array))
-        , Parser.succeed (\expr -> Parser.Loop (Builder.pushLast expr array))
+            |> Parser.map (\_ -> Parser.Done array)
+        , Parser.succeed (\expr -> Parser.Loop (Array.pushLast expr array))
             |> Parser.skip (Parser.chompChar ',' (ExpectedChar ','))
             |> Parser.skip spaceParser
             |> Parser.keep recordFieldParser

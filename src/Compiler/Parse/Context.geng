@@ -19,7 +19,6 @@ or generating code.
 -}
 
 import Dict exposing (Dict)
-import Array.Builder exposing (Builder)
 import Compiler.SourcePosition as SourcePosition
 
 
@@ -28,11 +27,17 @@ import Compiler.SourcePosition as SourcePosition
 * `indent` - the current indentation level
 * `lineStart` - the first non-whitespace character on the current line
 * `comments` - comments we've parsed from the source code
+
+The comments are an `Array`, not an `Array.Builder`: a backtracking parser
+keeps the state it may go back to, so whatever the payload holds is shared,
+and a value written in place may not be (geng-lang D923, D927). A push onto the
+newest array writes in place (D703); one onto an older version, after an
+alternative that read a comment fails, copies.
 -}
 type alias Context =
     { indent : Int
     , lineStart : Int
-    , comments : Builder (SourcePosition.Located Comment)
+    , comments : Array (SourcePosition.Located Comment)
     }
 
 
@@ -42,7 +47,7 @@ empty : Context
 empty =
     { indent = 1
     , lineStart = 1
-    , comments = Array.Builder.empty 0
+    , comments = []
     }
 
 

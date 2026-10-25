@@ -2,10 +2,10 @@ module Test.Compiler.Parse.Run exposing (DeadEnd, run)
 
 {-| `Parser.run` without the payload at each dead end.
 
-The payload is the parser's `Context`, whose comments are an `Array.Builder`,
-which has no `Eq` or `Inspect` instance, so a result that carries one can be
-neither compared nor shown. What a test asks about a failure is where it was and
-what the problem is.
+Each dead end carries the parser's `Context` at that point, comments and all.
+What a test asks about a failure is where it was and what the problem is. (The
+comments were an `Array.Builder`, which has no `Eq` or `Inspect` instance, until
+geng-lang D927.)
 -}
 
 import String.Parser.Advanced as Parser exposing (Parser)

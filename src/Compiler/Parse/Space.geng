@@ -30,7 +30,6 @@ import Compiler.Parse.Context as Context exposing (Context)
 import String.Parser.Advanced as Parser exposing (Parser)
 import Dict
 import Compiler.SourcePosition as SourcePosition
-import Array.Builder
 
 
 {-| The kind of errors that can happen while parsing whitespace and comments.
@@ -104,7 +103,7 @@ parseLoop _state =
                     Parser.updatePayload
                         (\payload  ->
                             { payload
-                                | comments = Array.Builder.pushLast value payload.comments
+                                | comments = Array.pushLast value payload.comments
                             }
                         )
                         Parser.getPayload
@@ -141,7 +140,7 @@ parseLoop _state =
                     Parser.updatePayload
                         (\payload  ->
                             { payload
-                                | comments = Array.Builder.pushLast value payload.comments
+                                | comments = Array.pushLast value payload.comments
                             }
                         )
                         Parser.getPayload
