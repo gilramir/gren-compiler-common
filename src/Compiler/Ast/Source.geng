@@ -225,7 +225,9 @@ type alias Type =
 {-| `TNamed` is `(name : Type)` or `(name : Type where predicate)`, a named and
 perhaps refined argument or result (geng-lang `m4-refine.md` D814). Its
 predicate is an ordinary expression, read by the type parser's own grammar
-(D815).
+(D815). `movedAt` is where `moved` starts when it is written before the name,
+`(moved b : Builder a)` (`m4-own.md` D920): the function takes the argument's
+value.
 -}
 type Type_
   = TLambda
@@ -249,7 +251,8 @@ type Type_
     }
   | TParens Type
   | TNamed
-    { name : SourcePosition.Located String
+    { movedAt : Maybe SourcePosition.Position
+    , name : SourcePosition.Located String
     , type_ : Type
     , refinement : Maybe Refinement
     }
@@ -306,15 +309,18 @@ type alias Alias =
   }
 
 
-{-| `keyword` is where `type` starts. Without `@derive` that is where the
-declaration does; with it, the declaration starts at the `@` and the keyword
-can be any number of rows below, past comments, so it is recorded.
+{-| `keyword` is where `type` starts. Without `@derive` or `@affine` that is
+where the declaration does; with one, the declaration starts at the `@` and the
+keyword can be any number of rows below, past comments, so it is recorded.
+`affine` is whether the type is declared `@affine` (geng-lang `m4-own.md`
+D921).
 -}
 type alias Union =
   { name : SourcePosition.Located String
   , vars : Array (SourcePosition.Located String)
   , variants : Array (SourcePosition.Located UnionVariant)
   , derives : Array (SourcePosition.Located String)
+  , affine : Bool
   , keyword : SourcePosition.Position
   }
 

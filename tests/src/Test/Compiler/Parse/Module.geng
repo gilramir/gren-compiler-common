@@ -473,6 +473,7 @@ tests =
                                           "Choice"
                                   , vars = []
                                   , derives = []
+                                  , affine = False
                                   , keyword = { row = 11, col = 1 }
                                   , variants =
                                       [ SourcePosition.at

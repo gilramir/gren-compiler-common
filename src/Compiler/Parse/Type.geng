@@ -299,8 +299,8 @@ parenthesized =
 named : Parser Context Error AST.Type_
 named =
     Parser.succeed
-        (\name tipe maybeRefinement ->
-            AST.TNamed { name = name, type_ = tipe, refinement = maybeRefinement }
+        (\head tipe maybeRefinement ->
+            AST.TNamed { movedAt = head.movedAt, name = head.name, type_ = tipe, refinement = maybeRefinement }
         )
         |> Parser.keep namedHead
         |> Parser.skip spaceParser
@@ -318,13 +318,27 @@ named =
         |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
 
 
-namedHead : Parser Context Error (SourcePosition.Located String)
+{-| A name and its colon, with `moved` before the name when it is written
+(geng-lang `m4-own.md` D920). `moved` is a keyword only there: `(moved : Int)`
+names a value `moved`.
+-}
+namedHead : Parser Context Error { movedAt : Maybe SourcePosition.Position, name : SourcePosition.Located String }
 namedHead =
-    Parser.succeed identity
-        |> Parser.keep (SourcePosition.parser (Parser.mapError VariableError Variable.lowerCase))
-        |> Parser.skip spaceParser
-        |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
-        |> Parser.backtrackable
+    Parser.oneOf
+        [ Parser.succeed (\at name -> { movedAt = Just at, name = name })
+            |> Parser.keep Parser.getPosition
+            |> Parser.skip (Variable.keyword "moved" (ExpectedString "moved"))
+            |> Parser.skip spaceParser
+            |> Parser.keep (SourcePosition.parser (Parser.mapError VariableError Variable.lowerCase))
+            |> Parser.skip spaceParser
+            |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
+            |> Parser.backtrackable
+        , Parser.succeed (\name -> { movedAt = Nothing, name = name })
+            |> Parser.keep (SourcePosition.parser (Parser.mapError VariableError Variable.lowerCase))
+            |> Parser.skip spaceParser
+            |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
+            |> Parser.backtrackable
+        ]
 
 
 

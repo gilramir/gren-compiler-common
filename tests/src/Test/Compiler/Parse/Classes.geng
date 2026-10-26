@@ -153,6 +153,56 @@ tests =
                             False
                     """
             ]
+        , describe "@affine (geng-lang D921, D944)"
+            [ test "on a custom type" <| \_ ->
+                """
+                @affine
+                type Lines
+                    = Lines Int
+                """
+                    |> Run.run PD.parser Context.empty
+                    |> Result.map
+                        (\decl ->
+                            when decl.value is
+                                PD.Union u ->
+                                    Just { affine = u.affine, keyword = u.keyword }
+
+                                _ ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just { affine = True, keyword = { row = 2, col = 1 } }))
+            , test "a custom type without it is not affine" <| \_ ->
+                """
+                type Lines
+                    = Lines Int
+                """
+                    |> Run.run PD.parser Context.empty
+                    |> Result.map
+                        (\decl ->
+                            when decl.value is
+                                PD.Union u ->
+                                    Just u.affine
+
+                                _ ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just False))
+            , test "on a type alias is refused" <| \_ ->
+                expectRefused
+                    """
+                    @affine
+                    type alias Report =
+                        { lines : Int }
+                    """
+            , test "on a value is refused" <| \_ ->
+                expectRefused
+                    """
+                    @affine
+                    lines : Int
+                    lines =
+                        1
+                    """
+            ]
         , describe "@derive"
             [ test "on a custom type" <| \_ ->
                 expectDecl

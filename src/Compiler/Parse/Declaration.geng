@@ -174,6 +174,24 @@ declarationValueParser { docs, start, attribute } =
                 ]
                 |> Parser.map finish
 
+        -- `@affine` is on a custom type and nothing else (D944): a record is
+        -- affine by its fields, so an alias has nothing to declare.
+        Affine_ ->
+            Parser.oneOf
+                [ typeParser []
+                    |> Parser.andThen
+                        (\value ->
+                            when value is
+                                Union u ->
+                                    Parser.succeed (Union { u | affine = True })
+
+                                _ ->
+                                    Parser.problem AttributeNotOnCustomType
+                        )
+                , Parser.problem AttributeNotOnCustomType
+                ]
+                |> Parser.map finish
+
         -- No fallback list: `@prim` is followed by an annotation and nothing
         -- else, so an error inside one is that error rather than "this is not
         -- a primitive declaration".
@@ -276,8 +294,9 @@ valueParser attributes start =
 {-| The attributes the language has: `@derive(Eq, Ord, Inspect)` on a custom
 type, `@prim("i32_add")` on an annotation (`core.md` C13), `@extern` and
 `@externPure` on an annotation (`ffi.md` F1), a bare `@capability` on a
-value that mints a capability (D258), and a bare `@inline` on a value `core`
-wants opened at every call (D545).
+value that mints a capability (D258), a bare `@inline` on a value `core`
+wants opened at every call (D545), and a bare `@affine` on a custom type whose
+values are used at most once (geng-lang `m4-own.md` D921).
 
 An attribute follows the documentation comment and precedes the declaration.
 -}
@@ -285,6 +304,7 @@ type Attribute
     = NoAttribute
     | Capability_
     | Inline_
+    | Affine_
     | Derive (Array (SourcePosition.Located String))
     | Prim_ (SourcePosition.Located String)
     | Extern_ AST.ExternImpl
@@ -310,6 +330,9 @@ attributeParser =
 
                         "inline" ->
                             Parser.map (\_ -> Inline_) bareAttributeEndParser
+
+                        "affine" ->
+                            Parser.map (\_ -> Affine_) bareAttributeEndParser
 
                         "extern" ->
                             Parser.map Extern_ (attributeArgsParser (externArgsParser (attributeAt name) False))
@@ -842,6 +865,7 @@ unionParser derives keyword =
                 , vars = vars
                 , variants = variants
                 , derives = derives
+                , affine = False
                 , keyword = keyword
                 }
         )

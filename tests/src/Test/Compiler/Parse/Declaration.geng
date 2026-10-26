@@ -215,6 +215,7 @@ tests =
                                     "Direction"
                             , vars = []
                             , derives = []
+                            , affine = False
                             , keyword = { row = 1, col = 1 }
                             , variants =
                                 [ SourcePosition.at
@@ -263,6 +264,7 @@ tests =
                                     "Direction"
                             , vars = []
                             , derives = []
+                            , affine = False
                             , keyword = { row = 3, col = 1 }
                             , variants =
                                 [ SourcePosition.at
@@ -309,6 +311,7 @@ tests =
                                     "a"
                                 ]
                             , derives = []
+                            , affine = False
                             , keyword = { row = 1, col = 1 }
                             , variants =
                                 [ SourcePosition.at
@@ -354,6 +357,7 @@ tests =
                                     "Person"
                             , vars = []
                             , derives = []
+                            , affine = False
                             , keyword = { row = 1, col = 1 }
                             , variants =
                                 [ SourcePosition.at
@@ -397,6 +401,7 @@ tests =
                                     "Person"
                             , vars = []
                             , derives = []
+                            , affine = False
                             , keyword = { row = 1, col = 1 }
                             , variants =
                                 [ SourcePosition.at
@@ -777,6 +782,7 @@ tests =
                                     "Foo"
                             , vars = []
                             , derives = []
+                            , affine = False
                             , keyword = { row = 1, col = 1 }
                             , variants =
                                 [ SourcePosition.at

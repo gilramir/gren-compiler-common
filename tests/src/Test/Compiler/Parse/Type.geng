@@ -54,6 +54,18 @@ tests =
                             ]
                         }
                     )
+        , test "`moved` before a name is recorded where it starts (geng-lang D920)" <| \_ ->
+            Run.run PT.expression Context.empty "(moved b : Builder)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { movedAt = Just { row = 1, col = 2 }, name = "b" }))
+        , test "`(moved : Int)` names a value `moved` (geng-lang D942)" <| \_ ->
+            Run.run PT.expression Context.empty "(moved : Int)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { movedAt = Nothing, name = "moved" }))
+        , test "`moved` with a predicate (geng-lang D942)" <| \_ ->
+            Run.run PT.expression Context.empty "(moved b : Builder where True)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { movedAt = Just { row = 1, col = 2 }, name = "b" }))
         , test "A type's arguments are terms, so an arrow after them is not in the last one" <| \_ ->
             Run.run PT.expression Context.empty "Dict String Int -> Int"
                 |> expectExpression
@@ -352,6 +364,16 @@ tests =
                         }
                     )
         ]
+
+
+named : SourcePosition.Located AST.Type_ -> Maybe { movedAt : Maybe SourcePosition.Position, name : String }
+named t =
+    when t.value is
+        AST.TNamed n ->
+            Just { movedAt = n.movedAt, name = n.name.value }
+
+        _ ->
+            Nothing
 
 
 expectExpression : (Eq a, Inspect a, Inspect e) => a -> Result (Array (Run.DeadEnd e)) (SourcePosition.Located a) -> Expectation
