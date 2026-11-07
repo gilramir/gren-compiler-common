@@ -536,6 +536,7 @@ tests =
                                                                  , args = []
                                                                  }
                                                              )
+                                                     , refinement = Nothing
                                                      }
                                                  , { field =
                                                          SourcePosition.at
@@ -555,6 +556,7 @@ tests =
                                                                  , args = []
                                                                  }
                                                              )
+                                                     , refinement = Nothing
                                                      }
                                                  ]
                                              , extending = Nothing

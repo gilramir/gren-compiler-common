@@ -305,17 +305,24 @@ named =
         |> Parser.keep namedHead
         |> Parser.skip spaceParser
         |> Parser.keep (Parser.lazy (\_ -> expression))
-        |> Parser.keep
-            (Parser.oneOf
-                [ Parser.succeed (\whereAt p -> Just { whereAt = whereAt, predicate = p })
-                    |> Parser.keep Parser.getPosition
-                    |> Parser.skip (Variable.keyword "where" (ExpectedString "where"))
-                    |> Parser.skip spaceParser
-                    |> Parser.keep predicate
-                , Parser.succeed Nothing
-                ]
-            )
+        |> Parser.keep whereClause
         |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+
+
+{-| A `where` and its predicate, when one follows a type: in a named type,
+`(i : Int where 0 <= i)`, and after a record field's type, `index : Int where
+index < Array.length items` (geng-lang `m4-refine-t1.md` TO8, Dnene15).
+-}
+whereClause : Parser Context Error (Maybe AST.Refinement)
+whereClause =
+    Parser.oneOf
+        [ Parser.succeed (\whereAt p -> Just { whereAt = whereAt, predicate = p })
+            |> Parser.keep Parser.getPosition
+            |> Parser.skip (Variable.keyword "where" (ExpectedString "where"))
+            |> Parser.skip spaceParser
+            |> Parser.keep predicate
+        , Parser.succeed Nothing
+        ]
 
 
 {-| A name and its colon, with `moved` before the name when it is written
@@ -552,11 +559,15 @@ recordParser =
                                 , Parser.succeed identity
                                     |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
                                     |> Parser.skip spaceParser
-                                    |> Parser.keep expression
+                                    |> Parser.keep
+                                        (Parser.succeed (\expr refinement -> { expr = expr, refinement = refinement })
+                                            |> Parser.keep expression
+                                            |> Parser.keep whereClause
+                                        )
                                     |> Parser.skip spaceParser
                                     |> Parser.andThen
-                                        (\expr ->
-                                            Parser.loop [ { field = var, signature = expr } ] innerRecordParser
+                                        (\{ expr, refinement } ->
+                                            Parser.loop [ { field = var, signature = expr, refinement = refinement } ] innerRecordParser
                                         )
                                     |> Parser.map (\fields -> AST.TRecord { fields = fields, extending = Nothing })
                                 ]
@@ -568,9 +579,10 @@ recordParser =
 recordFieldParser : Parser Context Error AST.TRecordField
 recordFieldParser =
     Parser.succeed
-        (\fieldStart field fieldEnd signature ->
+        (\fieldStart field fieldEnd signature refinement ->
             { field = SourcePosition.at fieldStart fieldEnd field
             , signature = signature
+            , refinement = refinement
             }
         )
         |> Parser.keep Parser.getPosition
@@ -580,6 +592,7 @@ recordFieldParser =
         |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
         |> Parser.skip spaceParser
         |> Parser.keep expression
+        |> Parser.keep whereClause
 
 
 innerRecordParser : Array AST.TRecordField -> Parser Context Error (Parser.Step (Array AST.TRecordField) (Array AST.TRecordField))

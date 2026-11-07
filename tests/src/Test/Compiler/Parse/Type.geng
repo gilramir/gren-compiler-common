@@ -66,6 +66,14 @@ tests =
             Run.run PT.expression Context.empty "(moved b : Builder where True)"
                 |> Result.map named
                 |> Expect.equal (Ok (Just { movedAt = Just { row = 1, col = 2 }, name = "b" }))
+        , test "A record field's predicate follows its type, its `where` recorded where it starts (geng-lang Dnene15)" <| \_ ->
+            Run.run PT.expression Context.empty "{ items : Array Int, index : Int where index < Array.length items }"
+                |> Result.map fieldWheres
+                |> Expect.equal (Ok [ { field = "items", whereAt = Nothing }, { field = "index", whereAt = Just { row = 1, col = 34 } } ])
+        , test "Each field may carry a predicate, in an extensible record too, which canonicalization refuses (geng-lang Dnene15)" <| \_ ->
+            Run.run PT.expression Context.empty "{ r | start : Int where 0 <= start, end : Int where start <= end }"
+                |> Result.map fieldWheres
+                |> Expect.equal (Ok [ { field = "start", whereAt = Just { row = 1, col = 19 } }, { field = "end", whereAt = Just { row = 1, col = 47 } } ])
         , test "A type's arguments are terms, so an arrow after them is not in the last one" <| \_ ->
             Run.run PT.expression Context.empty "Dict String Int -> Int"
                 |> expectExpression
@@ -210,6 +218,7 @@ tests =
                                                 "String"
                                         }
                                     )
+                              , refinement = Nothing
                               }
                             ]
                         , extending = Nothing
@@ -238,6 +247,7 @@ tests =
                                                 "String"
                                         }
                                     )
+                              , refinement = Nothing
                               }
                             , { field =
                                   SourcePosition.at
@@ -257,6 +267,7 @@ tests =
                                                 "String"
                                         }
                                     )
+                              , refinement = Nothing
                               }
                             ]
                         , extending = Nothing
@@ -285,6 +296,7 @@ tests =
                                                 "String"
                                         }
                                     )
+                              , refinement = Nothing
                               }
                             , { field =
                                   SourcePosition.at
@@ -304,6 +316,7 @@ tests =
                                                 "String"
                                         }
                                     )
+                              , refinement = Nothing
                               }
                             ]
                         , extending =
@@ -374,6 +387,16 @@ named t =
 
         _ ->
             Nothing
+
+
+fieldWheres : SourcePosition.Located AST.Type_ -> Array { field : String, whereAt : Maybe SourcePosition.Position }
+fieldWheres t =
+    when t.value is
+        AST.TRecord r ->
+            Array.map (\f -> { field = f.field.value, whereAt = Maybe.map .whereAt f.refinement }) r.fields
+
+        _ ->
+            []
 
 
 expectExpression : (Eq a, Inspect a, Inspect e) => a -> Result (Array (Run.DeadEnd e)) (SourcePosition.Located a) -> Expectation

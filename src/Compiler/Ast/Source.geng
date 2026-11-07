@@ -267,11 +267,14 @@ type alias Refinement =
     }
 
 
-{-|
+{-| A record type's field. Its `refinement` is the predicate written after its
+type, `index : Int where index < Array.length items`, which may name the
+record's other fields (geng-lang `m4-refine-t1.md` TO8, Dnene15).
 -}
 type alias TRecordField =
     { field : SourcePosition.Located String
     , signature : Type
+    , refinement : Maybe Refinement
     }
 
 
