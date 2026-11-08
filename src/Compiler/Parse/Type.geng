@@ -32,6 +32,7 @@ type Error
     | ExpectedIndent
     | SpaceError Space.Error
     | BadRefinement
+    | RetiredMoved
 
 
 {-| Returns a human-readable description of an `Error`.
@@ -53,6 +54,9 @@ errorToString error =
         
         SpaceError spaceError ->
             Space.errorToString spaceError
+
+        RetiredMoved ->
+            "A signature marks an argument the function takes with `taken`, not `moved`: (taken b : Builder a)"
 
         BadRefinement ->
             "Expected a refinement's predicate: integer literals, argument names and their fields, a measure applied to a name or a field, True, False, not, a unary -, parentheses, and + - * < <= > >= == /= && ||"
@@ -300,7 +304,7 @@ named : Parser Context Error AST.Type_
 named =
     Parser.succeed
         (\head tipe maybeRefinement ->
-            AST.TNamed { movedAt = head.movedAt, name = head.name, type_ = tipe, refinement = maybeRefinement }
+            AST.TNamed { takenAt = head.takenAt, name = head.name, type_ = tipe, refinement = maybeRefinement }
         )
         |> Parser.keep namedHead
         |> Parser.skip spaceParser
@@ -325,22 +329,32 @@ whereClause =
         ]
 
 
-{-| A name and its colon, with `moved` before the name when it is written
-(geng-lang `m4-own.md` D920). `moved` is a keyword only there: `(moved : Int)`
-names a value `moved`.
+{-| A name and its colon, with `taken` before the name when it is written
+(geng-lang `m4-own.md` D920). `taken` is a keyword only there: `(taken : Int)`
+names a value `taken`. `moved`, the mark's word until geng-lang Dnene18, is
+refused there with `RetiredMoved`, and is still a name in `(moved : Int)`.
 -}
-namedHead : Parser Context Error { movedAt : Maybe SourcePosition.Position, name : SourcePosition.Located String }
+namedHead : Parser Context Error { takenAt : Maybe SourcePosition.Position, name : SourcePosition.Located String }
 namedHead =
     Parser.oneOf
-        [ Parser.succeed (\at name -> { movedAt = Just at, name = name })
+        [ Parser.succeed (\at name -> { takenAt = Just at, name = name })
             |> Parser.keep Parser.getPosition
-            |> Parser.skip (Variable.keyword "moved" (ExpectedString "moved"))
+            |> Parser.skip (Variable.keyword "taken" (ExpectedString "taken"))
             |> Parser.skip spaceParser
             |> Parser.keep (SourcePosition.parser (Parser.mapError VariableError Variable.lowerCase))
             |> Parser.skip spaceParser
             |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
             |> Parser.backtrackable
-        , Parser.succeed (\name -> { movedAt = Nothing, name = name })
+        , Parser.succeed {}
+            |> Parser.skip (Variable.keyword "moved" (ExpectedString "moved"))
+            |> Parser.skip spaceParser
+            |> Parser.skip (Parser.mapError VariableError Variable.lowerCase)
+            |> Parser.skip spaceParser
+            |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))
+            |> Parser.backtrackable
+            |> Parser.andThen (\_ -> Parser.commit {})
+            |> Parser.andThen (\_ -> Parser.problem RetiredMoved)
+        , Parser.succeed (\name -> { takenAt = Nothing, name = name })
             |> Parser.keep (SourcePosition.parser (Parser.mapError VariableError Variable.lowerCase))
             |> Parser.skip spaceParser
             |> Parser.skip (Parser.chompChar ':' (ExpectedChar ':'))

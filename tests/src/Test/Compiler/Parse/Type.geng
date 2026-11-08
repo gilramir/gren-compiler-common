@@ -54,18 +54,29 @@ tests =
                             ]
                         }
                     )
-        , test "`moved` before a name is recorded where it starts (geng-lang D920)" <| \_ ->
-            Run.run PT.expression Context.empty "(moved b : Builder)"
+        , test "`taken` before a name is recorded where it starts (geng-lang D920)" <| \_ ->
+            Run.run PT.expression Context.empty "(taken b : Builder)"
                 |> Result.map named
-                |> Expect.equal (Ok (Just { movedAt = Just { row = 1, col = 2 }, name = "b" }))
-        , test "`(moved : Int)` names a value `moved` (geng-lang D942)" <| \_ ->
+                |> Expect.equal (Ok (Just { takenAt = Just { row = 1, col = 2 }, name = "b" }))
+        , test "`(taken : Int)` names a value `taken` (geng-lang D942)" <| \_ ->
+            Run.run PT.expression Context.empty "(taken : Int)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "taken" }))
+        , test "`moved` before a name is refused with what to write (geng-lang Dnene18)" <| \_ ->
+            when Run.run PT.expression Context.empty "(moved b : Builder)" is
+                Ok _ ->
+                    Expect.fail "Expected an error"
+
+                Err problems ->
+                    Expect.equal [ PT.RetiredMoved ] (Array.map .problem problems)
+        , test "`(moved : Int)` still names a value `moved` (geng-lang Dnene18)" <| \_ ->
             Run.run PT.expression Context.empty "(moved : Int)"
                 |> Result.map named
-                |> Expect.equal (Ok (Just { movedAt = Nothing, name = "moved" }))
-        , test "`moved` with a predicate (geng-lang D942)" <| \_ ->
-            Run.run PT.expression Context.empty "(moved b : Builder where True)"
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "moved" }))
+        , test "`taken` with a predicate (geng-lang D942)" <| \_ ->
+            Run.run PT.expression Context.empty "(taken b : Builder where True)"
                 |> Result.map named
-                |> Expect.equal (Ok (Just { movedAt = Just { row = 1, col = 2 }, name = "b" }))
+                |> Expect.equal (Ok (Just { takenAt = Just { row = 1, col = 2 }, name = "b" }))
         , test "A record field's predicate follows its type, its `where` recorded where it starts (geng-lang Dnene15)" <| \_ ->
             Run.run PT.expression Context.empty "{ items : Array Int, index : Int where index < Array.length items }"
                 |> Result.map fieldWheres
@@ -379,11 +390,11 @@ tests =
         ]
 
 
-named : SourcePosition.Located AST.Type_ -> Maybe { movedAt : Maybe SourcePosition.Position, name : String }
+named : SourcePosition.Located AST.Type_ -> Maybe { takenAt : Maybe SourcePosition.Position, name : String }
 named t =
     when t.value is
         AST.TNamed n ->
-            Just { movedAt = n.movedAt, name = n.name.value }
+            Just { takenAt = n.takenAt, name = n.name.value }
 
         _ ->
             Nothing

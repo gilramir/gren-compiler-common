@@ -225,8 +225,8 @@ type alias Type =
 {-| `TNamed` is `(name : Type)` or `(name : Type where predicate)`, a named and
 perhaps refined argument or result (geng-lang `m4-refine.md` D814). Its
 predicate is an ordinary expression, read by the type parser's own grammar
-(D815). `movedAt` is where `moved` starts when it is written before the name,
-`(moved b : Builder a)` (`m4-own.md` D920): the function takes the argument's
+(D815). `takenAt` is where `taken` starts when it is written before the name,
+`(taken b : Builder a)` (`m4-own.md` D920): the function takes the argument's
 value.
 -}
 type Type_
@@ -251,7 +251,7 @@ type Type_
     }
   | TParens Type
   | TNamed
-    { movedAt : Maybe SourcePosition.Position
+    { takenAt : Maybe SourcePosition.Position
     , name : SourcePosition.Located String
     , type_ : Type
     , refinement : Maybe Refinement
