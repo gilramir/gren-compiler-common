@@ -203,6 +203,45 @@ tests =
                         1
                     """
             ]
+        , describe "@measure (geng-lang m4-refine-t1.md TO14)"
+            [ test "on an annotated value" <| \_ ->
+                """
+                @measure
+                isEmpty : Shape -> Bool
+                isEmpty s =
+                    when s is
+                        Empty ->
+                            True
+
+                        _ ->
+                            False
+                """
+                    |> Run.run PD.parser Context.empty
+                    |> Result.map
+                        (\decl ->
+                            when decl.value is
+                                PD.Value v ->
+                                    Just { measure = v.measure, inline = v.inline }
+
+                                _ ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just { measure = True, inline = False }))
+            , test "on a value without an annotation is refused" <| \_ ->
+                expectRefused
+                    """
+                    @measure
+                    isEmpty s =
+                        False
+                    """
+            , test "on a custom type is refused" <| \_ ->
+                expectRefused
+                    """
+                    @measure
+                    type Shape
+                        = Empty
+                    """
+            ]
         , describe "@derive"
             [ test "on a custom type" <| \_ ->
                 expectDecl

@@ -461,7 +461,9 @@ integer =
             )
 
 
-{-| A name and its fields, or `not` and what it negates. -}
+{-| A name and its fields, `not` and what it negates, or a name applied to a
+name or its field: a program's own measure, written bare in its module or
+exposed by an import, `size t` (geng-lang `m4-refine-t1.md` TO14). -}
 lowerOperand : SourcePosition.Position -> String -> Parser Context Error AST.Expression
 lowerOperand start name =
     Parser.succeed (\end -> SourcePosition.at start end (AST.Var { name = name, varType = AST.LowVar }))
@@ -483,7 +485,19 @@ lowerOperand start name =
                         |> Parser.keep (Parser.lazy (\_ -> operand))
 
                 else
-                    Parser.succeed var
+                    Parser.oneOf
+                        [ Parser.getPosition
+                            |> Parser.andThen
+                                (\argStart ->
+                                    Parser.succeed (\argName argEnd -> SourcePosition.at argStart argEnd (AST.Var { name = argName, varType = AST.LowVar }))
+                                        |> Parser.keep (Parser.mapError VariableError Variable.lowerCase)
+                                        |> Parser.keep Parser.getPosition
+                                )
+                            |> Parser.andThen predicateFields
+                            |> Parser.map (\arg -> SourcePosition.at start arg.end (AST.Call { fn = var, args = [ arg ] }))
+                            |> Parser.skip spaceParser
+                        , Parser.succeed var
+                        ]
             )
 
 

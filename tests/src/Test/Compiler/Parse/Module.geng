@@ -430,6 +430,7 @@ tests =
                                           "num"
                                   , capability = False
                                   , inline = False
+                                  , measure = False
                                   , signature =
                                       Just
                                           { constraints = []
@@ -614,6 +615,7 @@ tests =
                                             "foo"
                                     , capability = False
                                     , inline = False
+                                    , measure = False
                                     , signature =
                                         Just
                                             { constraints = []
@@ -720,6 +722,7 @@ tests =
                                             "bar"
                                     , capability = False
                                     , inline = False
+                                    , measure = False
                                     , signature =
                                         Just
                                             { constraints = []
@@ -836,6 +839,7 @@ tests =
                                         "add"
                                 , capability = False
                                 , inline = False
+                                , measure = False
                                 , signature =
                                     Just
                                         { constraints = []

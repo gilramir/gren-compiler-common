@@ -346,6 +346,9 @@ type alias Value =
   -- Declared under `@inline` (D545), which only `core` writes: the inliner
   -- opens every call to it whatever its size.
   , inline : Bool
+  -- Declared under `@measure` (geng-lang `m4-refine-t1.md` TO14): a
+  -- refinement's predicate may call it.
+  , measure : Bool
   , signature :
     Maybe
       { start : SourcePosition.Position

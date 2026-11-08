@@ -85,6 +85,14 @@ tests =
             Run.run PT.expression Context.empty "{ r | start : Int where 0 <= start, end : Int where start <= end }"
                 |> Result.map fieldWheres
                 |> Expect.equal (Ok [ { field = "start", whereAt = Just { row = 1, col = 19 } }, { field = "end", whereAt = Just { row = 1, col = 47 } } ])
+        , test "A bare name applied to a name is a call, a measure of the program's own (geng-lang m4-refine-t1.md TO14)" <| \_ ->
+            Run.run PT.expression Context.empty "(s : Shape where not (isEmpty s) && corners s.inner == 4)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "s" }))
+        , test "A name before an operator is still a name, not a call" <| \_ ->
+            Run.run PT.expression Context.empty "(n : Int where n < limit)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "n" }))
         , test "A type's arguments are terms, so an arrow after them is not in the last one" <| \_ ->
             Run.run PT.expression Context.empty "Dict String Int -> Int"
                 |> expectExpression

@@ -490,6 +490,7 @@ tests =
                                     "foo"
                             , capability = False
                             , inline = False
+                            , measure = False
                             , signature = Nothing
                             , args = []
                             , body =
@@ -513,6 +514,7 @@ tests =
                                     "typeCheck"
                             , capability = False
                             , inline = False
+                            , measure = False
                             , signature = Nothing
                             , args = []
                             , body =
@@ -536,6 +538,7 @@ tests =
                                     "portCheck"
                             , capability = False
                             , inline = False
+                            , measure = False
                             , signature = Nothing
                             , args = []
                             , body =
@@ -566,6 +569,7 @@ tests =
                                     "foo"
                             , capability = False
                             , inline = False
+                            , measure = False
                             , signature = Nothing
                             , args = []
                             , body =
@@ -590,6 +594,7 @@ tests =
                                     "foo"
                             , capability = False
                             , inline = False
+                            , measure = False
                             , signature =
                                 Just
                                     { constraints = []
@@ -640,6 +645,7 @@ tests =
                                     "foo"
                             , capability = False
                             , inline = False
+                            , measure = False
                             , signature =
                                 Just
                                     { constraints = []
