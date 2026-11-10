@@ -164,6 +164,10 @@ toPlatform runtime =
         Node -> Just Platform.Node
         Beam -> Just Platform.Node
         Os -> Just Platform.Node
+        -- the platforms under `os` (geng-lang D1074) are `os`'s to the
+        -- backend; which one a build is for is the build's own input
+        Linux -> Just Platform.Node
+        Windows -> Just Platform.Node
         Host -> Just Platform.Host
         _ -> Nothing
 
