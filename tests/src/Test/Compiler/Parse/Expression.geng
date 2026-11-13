@@ -2123,6 +2123,58 @@ tests =
                 Run.run PE.parser Context.empty "(1 : Num a => a)"
                     |> expectRefused
             ]
+        , describe "meant (geng-lang TO23)"
+            [ test "a reason and a value" <| \_ ->
+                Run.run PE.parser Context.empty "meant Input 80"
+                    |> expectLocatedExpression
+                        (SourcePosition.at
+                            { row = 1, col = 1 }
+                            { row = 1, col = 15 }
+                            (AST.Meant
+                                { reason = SourcePosition.at { row = 1, col = 7 } { row = 1, col = 12 } "Input"
+                                , expression =
+                                    SourcePosition.at
+                                        { row = 1, col = 13 }
+                                        { row = 1, col = 15 }
+                                        (AST.NumberLiteral (Number.Integer { text = "80" }))
+                                }
+                            )
+                        )
+            , test "a qualified reason" <| \_ ->
+                Run.run PE.parser Context.empty "meant Reason.Input x"
+                    |> expectMeant "Reason.Input" (\e -> e == AST.Var { varType = AST.LowVar, name = "x" })
+            , test "its value reaches as far as an if's last branch does" <| \_ ->
+                Run.run PE.parser Context.empty "meant Input f x + 1"
+                    |> expectMeant "Input"
+                        (\e ->
+                            when e is
+                                AST.Binops _ ->
+                                    True
+
+                                _ ->
+                                    False
+                        )
+            , test "a when's fallback branch" <| \_ ->
+                Run.run PE.parser Context.empty "when x is\n    Just y ->\n        y\n\n    Nothing ->\n        meant Input 0"
+                    |> expectWhenLastBranch
+                        (\e ->
+                            when e is
+                                AST.Meant { reason } ->
+                                    reason.value == "Input"
+
+                                _ ->
+                                    False
+                        )
+            , test "a parenthesized default, as an argument" <| \_ ->
+                Run.run PE.parser Context.empty "Maybe.withDefault (meant Input 80) x"
+                    |> expectOk
+            , test "a reason is a capitalized name" <| \_ ->
+                Run.run PE.parser Context.empty "meant input 80"
+                    |> expectRefused
+            , test "meant is no longer a name" <| \_ ->
+                Run.run PE.parser Context.empty "meant"
+                    |> expectRefused
+            ]
         ]
 
 
@@ -2231,3 +2283,43 @@ expectErr expected result =
 
                 Nothing ->
                     Expect.fail "Failed, but with no problems..."
+
+
+
+expectMeant : Inspect e => String -> (AST.Expression_ -> Bool) -> Result (Array (Run.DeadEnd e)) AST.Expression -> Expectation
+expectMeant reason isExpected result =
+    when result is
+        Ok { value = AST.Meant m } ->
+            if m.reason.value == reason && isExpected m.expression.value then
+                Expect.pass
+
+            else
+                Expect.fail ("the wrong reason or value: " ++ inspect m)
+
+        Ok { value } ->
+            Expect.fail ("not a meant: " ++ inspect value)
+
+        Err err ->
+            Expect.fail (inspect err)
+
+
+expectWhenLastBranch : Inspect e => (AST.Expression_ -> Bool) -> Result (Array (Run.DeadEnd e)) AST.Expression -> Expectation
+expectWhenLastBranch isExpected result =
+    when result is
+        Ok { value = AST.When { branches } } ->
+            when Array.last branches is
+                Just branch ->
+                    if isExpected branch.body.value then
+                        Expect.pass
+
+                    else
+                        Expect.fail ("the last branch is " ++ inspect branch.body.value)
+
+                Nothing ->
+                    Expect.fail "no branches"
+
+        Ok { value } ->
+            Expect.fail ("not a when: " ++ inspect value)
+
+        Err err ->
+            Expect.fail (inspect err)

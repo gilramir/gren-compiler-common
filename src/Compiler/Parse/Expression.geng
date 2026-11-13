@@ -174,6 +174,7 @@ blockParser =
         , whenParser
         , letParser
         , lambdaParser
+        , meantParser
         ]
 
 
@@ -532,6 +533,32 @@ ifElseLoop startPos branches =
             |> Parser.keep parser
             |> Parser.skip spaceParser
         ]
+
+
+-- MEANT
+
+
+{-| `meant REASON EXPRESSION` (geng-lang m4-refine-t1.md TO23): the keyword,
+a capitalized name, qualified or not, then an expression, which reaches as
+far as an `if`'s last branch does. -}
+meantParser : Parser Context Error AST.Expression
+meantParser =
+    Parser.succeed
+        (\start reason expr ->
+            SourcePosition.at start expr.end (AST.Meant { reason = reason, expression = expr })
+        )
+        |> Parser.keep Parser.getPosition
+        |> Parser.skip (Variable.keyword "meant" (ExpectedKeyword "meant"))
+        |> Parser.skip spaceParser
+        |> Parser.keep
+            (SourcePosition.parser
+                (Variable.foreignUpper
+                    |> Parser.map Variable.foreignVarToString
+                    |> Parser.mapError VariableError
+                )
+            )
+        |> Parser.skip spaceParser
+        |> Parser.keep (Parser.lazy (\_ -> parser))
 
 
 -- WHEN IS

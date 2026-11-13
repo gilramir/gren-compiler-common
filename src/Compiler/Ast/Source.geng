@@ -113,6 +113,13 @@ type Expression_
     { expression : Expression
     , annotation : Type
     }
+  | -- | `meant REASON EXPRESSION` (geng-lang m4-refine-t1.md TO23): a
+    -- fallback meant, its reason a constructor as written, qualified or
+    -- not (`Input`, `Reason.Input`); its value is the expression's.
+    Meant
+    { reason : SourcePosition.Located String
+    , expression : Expression
+    }
 
 
 {-|
