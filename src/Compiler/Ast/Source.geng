@@ -335,10 +335,12 @@ type alias Union =
   }
 
 
-{-|
+{-| A variant: its doc comment, if it has one (its text without `{-|` and
+`-}`, geng-lang `m4-refine-t1.md` TO24), its name and its argument.
 -}
 type alias UnionVariant =
-  { name : SourcePosition.Located String
+  { doc : Maybe (SourcePosition.Located String)
+  , name : SourcePosition.Located String
   , payload : Maybe Type
   }
 

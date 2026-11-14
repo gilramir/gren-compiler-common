@@ -485,6 +485,7 @@ tests =
                                                   { row = 12, col = 5 }
                                                   { row = 12, col = 9 }
                                                   "Left"
+                                          , doc = Nothing
                                           , payload = Nothing
                                           }
                                       , SourcePosition.at
@@ -495,6 +496,7 @@ tests =
                                                   { row = 13, col = 5 }
                                                   { row = 13, col = 10 }
                                                   "Right"
+                                          , doc = Nothing
                                           , payload = Nothing
                                           }
                                       ]

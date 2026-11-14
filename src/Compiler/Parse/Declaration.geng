@@ -920,7 +920,7 @@ unionParser derives keyword =
 variantParser : Parser Context Error (SourcePosition.Located AST.UnionVariant)
 variantParser =
     Parser.succeed
-        (\name payload ->
+        (\doc name payload ->
             let
                 variantEnd =
                     payload
@@ -930,10 +930,14 @@ variantParser =
             SourcePosition.at
                 name.start
                 variantEnd
-                { name = name
+                { doc = doc
+                , name = name
                 , payload = payload
                 }
         )
+        -- a variant's own doc comment, before its name (geng-lang
+        -- m4-refine-t1.md TO24)
+        |> Parser.keep (docParser ExpectedKeyword)
         |> Parser.keep (SourcePosition.parser upperCaseVariable)
         |> Parser.skip spaceParser
         |> Parser.keep
