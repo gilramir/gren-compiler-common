@@ -372,7 +372,9 @@ allows: integer literals, names, a qualified function applied to one name (a
 measure, `Bytes.length b`), `True`, `False`, `not`, unary `-`, the operators
 `+ - * // < <= > >= == /= && ||` and parentheses; and since Dgmk6 the
 remainders `modBy`, `divFloor` and `remainderBy` of two operands (geng-lang
-`m4-refine-wrap.md` §WR5).
+`m4-refine-wrap.md` §WR5); and since Dgmk12 `Bitwise`'s methods, qualified
+as code writes them, `Bitwise.and 255 x`, each operand as a remainder's is
+(§WR12).
 
 The operators are read as a chain nested to the left, as the expression parser
 reads them, and are given their precedence where every chain is, so a
@@ -555,6 +557,14 @@ remainders =
     [ "modBy", "divFloor", "remainderBy" ]
 
 
+{-| `Bitwise`'s methods a predicate may call, by a qualified name (geng-lang
+`m4-refine-wrap.md` §WR12): `complement` of one operand, the rest of two.
+-}
+bitOperations : Array String
+bitOperations =
+    [ "and", "or", "xor", "complement", "shiftLeftBy", "shiftRightBy", "shiftRightZfBy" ]
+
+
 {-| A name's fields, each `.field` glued to what it reads, as an expression's
 are (geng-lang `m4-refine-t1.md` TO5, Dnene13): `m.index`,
 `Array.length m.items`.
@@ -589,7 +599,26 @@ upperOperand start var =
                             Parser.problem BadRefinement
 
                     Variable.Qualified { module_, name } ->
-                        if String.popFirst name |> Maybe.map (\{ first } -> Char.isLower first) |> Maybe.withDefault False then
+                        if Array.member name bitOperations then
+                            -- `Bitwise.and c x` and the rest of two operands,
+                            -- `Bitwise.complement x` of one, each operand as a
+                            -- remainder's (geng-lang `m4-refine-wrap.md` §WR12)
+                            let
+                                fn =
+                                    SourcePosition.at start end (AST.VarQual { varType = AST.LowVar, qualifier = module_, name = name })
+                            in
+                            if name == "complement" then
+                                Parser.succeed (\arg -> SourcePosition.at start arg.end (AST.Call { fn = fn, args = [ arg ] }))
+                                    |> Parser.skip spaceParser
+                                    |> Parser.keep (Parser.lazy (\_ -> remainderOperand))
+
+                            else
+                                Parser.succeed (\a b -> SourcePosition.at start b.end (AST.Call { fn = fn, args = [ a, b ] }))
+                                    |> Parser.skip spaceParser
+                                    |> Parser.keep (Parser.lazy (\_ -> remainderOperand))
+                                    |> Parser.keep (Parser.lazy (\_ -> remainderOperand))
+
+                        else if String.popFirst name |> Maybe.map (\{ first } -> Char.isLower first) |> Maybe.withDefault False then
                             let
                                 fn =
                                     SourcePosition.at start end (AST.VarQual { varType = AST.LowVar, qualifier = module_, name = name })
