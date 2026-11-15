@@ -509,12 +509,14 @@ lowerOperand start name =
             )
 
 
-{-| A remainder's divisor or dividend, and the space after it: a name and
-its fields, a negation of one, or any other operand. A name is never read as
-a call here, so that in `modBy d n` the `d` is not taken as applied to `n`
-(found by the formatter's random modules); a measure of a name,
-`Array.length a`, is still read as one, since its head says it is a call
-(geng-lang `m4-refine-wrap.md` §WR9).
+{-| A remainder's divisor or dividend, and the space after it: a literal, a
+name and its fields, a negation of one of these, or a chain in parentheses;
+never a call, so that `modBy d n` reads as it does in code. A name followed
+by a name would otherwise be a call, `d n` (found by the formatter's random
+modules), and a measure, `modBy Array.length a n`, would mean what no
+expression means: in code that is `modBy` given three arguments. A measure
+is written in parentheses here, as it is in code (geng-lang
+`m4-refine-wrap.md` §WR9).
 -}
 remainderOperand : Parser Context Error AST.Expression
 remainderOperand =
@@ -530,7 +532,17 @@ remainderOperand =
                     , Parser.succeed (\inner -> SourcePosition.at start inner.end (AST.Negate inner))
                         |> Parser.skip (Parser.chompChar '-' BadRefinement)
                         |> Parser.keep (Parser.lazy (\_ -> remainderOperand))
-                    , Parser.lazy (\_ -> operand)
+                    , Parser.succeed (\number end -> SourcePosition.at start end (AST.NumberLiteral number))
+                        |> Parser.keep integer
+                        |> Parser.keep Parser.getPosition
+                        |> Parser.skip spaceParser
+                    , Parser.succeed (\inner end -> SourcePosition.at start end (AST.Parens inner))
+                        |> Parser.skip (Parser.chompChar '(' (ExpectedChar '('))
+                        |> Parser.skip spaceParser
+                        |> Parser.keep (Parser.lazy (\_ -> predicate))
+                        |> Parser.skip (Parser.chompChar ')' (ExpectedChar ')'))
+                        |> Parser.keep Parser.getPosition
+                        |> Parser.skip spaceParser
                     ]
             )
 
