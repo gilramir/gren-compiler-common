@@ -1,29 +1,27 @@
 module Compiler.Parse.Module exposing
-    ( Error (..)
-    , parser
-    , headerParser
+    ( Error(..)
     , errorToString
     , errorsToString
+    , headerParser
+    , parser
     )
-
 
 {-| This will let you parse entire modules of Gren code.
 
 @docs parser, headerParser, Error, errorToString, errorsToString
 -}
 
-
-import String.Parser.Advanced as Parser exposing (Parser)
 import Compiler.Ast.Source as AST
-import Compiler.SourcePosition as SourcePosition
+import Compiler.ModuleName as ModuleName
+import Compiler.Parse.Context exposing (Context)
+import Compiler.Parse.Declaration as Declaration
+import Compiler.Parse.Declaration as Declaration exposing (Declaration)
+import Compiler.Parse.Number as Number
+import Compiler.Parse.Operator as Operator
 import Compiler.Parse.Space as Space
 import Compiler.Parse.Variable as Variable
-import Compiler.Parse.Operator as Operator
-import Compiler.Parse.Declaration as Declaration
-import Compiler.Parse.Number as Number
-import Compiler.Parse.Declaration as Declaration exposing (Declaration)
-import Compiler.Parse.Context exposing (Context)
-import Compiler.ModuleName as ModuleName
+import Compiler.SourcePosition as SourcePosition
+import String.Parser.Advanced as Parser exposing (Parser)
 
 
 {-| The kind of errors that can happen while parsing Gren modules.
@@ -49,22 +47,22 @@ errorToString error =
     when error is
         ExpectedKeyword keyword ->
             "Expected keyword '" ++ keyword ++ "'"
-        
+
         ExpectedChar char ->
             "Expected character '" ++ String.fromChar char ++ "'"
-        
+
         VariableError varError ->
             Variable.errorToString varError
-        
+
         OperatorError opError ->
             Operator.errorToString opError
-        
+
         ExpectedIntPrecedence ->
             "Expected integer precedence value"
-        
+
         DeclarationError declError ->
             Declaration.errorToString declError
-        
+
         SpaceError spaceError ->
             Space.errorToString spaceError
 
@@ -189,7 +187,7 @@ parser =
 moduleNameParser : Parser Context Error (SourcePosition.Located String)
 moduleNameParser =
     SourcePosition.parser
-        ( Variable.foreignUpper
+        (Variable.foreignUpper
             |> Parser.mapError VariableError
             |> Parser.map Variable.foreignVarToString
             |> Parser.andThen
@@ -241,7 +239,7 @@ parseExposingStatement =
                 ]
             )
 
-    
+
 parseExposingArray : Array AST.Exposed -> Parser Context Error (Parser.Step (Array AST.Exposed) (Array AST.Exposed))
 parseExposingArray exps =
     Parser.oneOf
@@ -324,14 +322,16 @@ parsePrecedence =
 
 parseOperatorDeclaration : Parser Context Error (SourcePosition.Located AST.Infix)
 parseOperatorDeclaration =
-    Parser.succeed (\start assoc prec op func end ->
-        SourcePosition.at start end
-            { fn = func.value
-            , symbol = op.value
-            , associativity = assoc
-            , precedence = prec
-            }
-    )
+    Parser.succeed
+        (\start assoc prec op func end ->
+            SourcePosition.at start
+                end
+                { fn = func.value
+                , symbol = op.value
+                , associativity = assoc
+                , precedence = prec
+                }
+        )
         |> Parser.keep Parser.getPosition
         |> Parser.skip (Variable.keyword "infix" (ExpectedKeyword "infix"))
         |> Parser.skip spaceParser
@@ -349,8 +349,8 @@ parseOperatorDeclaration =
         |> Parser.keep Parser.getPosition
 
 
-importLoopParser
-    : Array (SourcePosition.Located AST.Import)
+importLoopParser :
+    Array (SourcePosition.Located AST.Import)
     -> Parser Context Error (Parser.Step (Array (SourcePosition.Located AST.Import)) (Array (SourcePosition.Located AST.Import)))
 importLoopParser imps =
     Parser.oneOf
@@ -378,10 +378,7 @@ importLoopParser imps =
                             (\alias ->
                                 { baseImport
                                     | end = alias.end
-                                    , value =
-                                        { baseImport.value
-                                            | alias = Just alias.value
-                                        }
+                                    , value = { baseImport.value | alias = Just alias.value }
                                 }
                             )
                             |> Parser.skip (Variable.keyword "as" (ExpectedKeyword "as"))
@@ -403,10 +400,7 @@ importLoopParser imps =
 
                                     else
                                         endPos
-                                , value =
-                                    { importWithAlias.value
-                                        | expose = expose
-                                    }
+                                , value = { importWithAlias.value | expose = expose }
                             }
                         )
                         |> Parser.keep
@@ -448,8 +442,8 @@ importKeywordParser =
             )
 
 
-operatorLoopParser
-    : Array (SourcePosition.Located AST.Infix)
+operatorLoopParser :
+    Array (SourcePosition.Located AST.Infix)
     -> Parser Context Error (Parser.Step (Array (SourcePosition.Located AST.Infix)) (Array (SourcePosition.Located AST.Infix)))
 operatorLoopParser ops =
     Parser.oneOf
@@ -465,8 +459,8 @@ operatorLoopParser ops =
         ]
 
 
-declarationLoopParser
-    : Array Declaration.Declaration
+declarationLoopParser :
+    Array Declaration.Declaration
     -> Parser Context Error (Parser.Step (Array Declaration.Declaration) (Array Declaration.Declaration))
 declarationLoopParser decls =
     Parser.oneOf
@@ -487,11 +481,11 @@ declarationToModuleValue decl =
     when decl.value is
         Declaration.Value v ->
             let
-                -- A value under `@capability`, `@inline` or `@measure`
-                -- begins at the attribute, which is a row above its
-                -- annotation's start.
+                -- A value under `@capability`, `@inline`, `@measure` or
+                -- `@candidate` begins at the attribute, which is a row above
+                -- its annotation's start.
                 start =
-                    if v.capability || v.inline || v.measure then
+                    if v.capability || v.inline || v.measure || v.candidate then
                         decl.start
 
                     else
@@ -653,16 +647,14 @@ of where the parser failed, and why.
 -}
 errorsToString : String -> Array (Parser.DeadEnd Context Error) -> String
 errorsToString src deadEnds =
-  String.join "" <|
-    Parser.renderDeadEnds
-      { text = identity
-      , formatCaret = identity
-      , formatContext = identity
-      , newline = "\n"
-      , linesOfExtraContext = 2
-      }
-      { deadEndToString = \de -> { row = de.row, col = de.col, context = "" }
-      , problemToString = \err -> Parser.Other (errorToString err)
-      }
-      src
-      (Array.map (\de -> { row = de.row, col = de.col, payload = {}, problem = de.problem }) deadEnds)
+    String.join "" <|
+        Parser.renderDeadEnds
+            { text = identity
+            , formatCaret = identity
+            , formatContext = identity
+            , newline = "\n"
+            , linesOfExtraContext = 2
+            }
+            { deadEndToString = \de -> { row = de.row, col = de.col, context = "" }, problemToString = \err -> Parser.Other (errorToString err) }
+            src
+            (Array.map (\de -> { row = de.row, col = de.col, payload = {}, problem = de.problem }) deadEnds)

@@ -1,29 +1,27 @@
 module Compiler.Parse.Declaration exposing
     ( Declaration
-    , DeclarationValue (..)
-    , Error (..)
-    , parser
+    , DeclarationValue(..)
+    , Error(..)
     , docParser
     , errorToString
+    , parser
     )
-
 
 {-| This module provides parsers for Gren declarations (values, types, etc.).
 
 @docs Declaration, DeclarationValue, parser, docParser, Error, errorToString
 -}
 
-
-import String.Parser.Advanced as Parser exposing (Parser)
 import Compiler.Ast.Source as AST
-import Compiler.SourcePosition as SourcePosition
-import Compiler.Parse.Space as Space
-import Compiler.Parse.Variable as Variable
+import Compiler.Parse.Context exposing (Context)
+import Compiler.Parse.Expression as Expr
 import Compiler.Parse.Pattern as Pattern
+import Compiler.Parse.Space as Space
 import Compiler.Parse.String as String
 import Compiler.Parse.Type as Type
-import Compiler.Parse.Expression as Expr
-import Compiler.Parse.Context exposing (Context)
+import Compiler.Parse.Variable as Variable
+import Compiler.SourcePosition as SourcePosition
+import String.Parser.Advanced as Parser exposing (Parser)
 
 
 {-| A `Declaration` is a top-level definition in a module. Like type- or
@@ -64,6 +62,7 @@ type Error
     | AttributeNotOnCustomType
     | InlineNotOnValue
     | MeasureNotOnValue
+    | CandidateNotOnValue
     | AttributeNeedsFreshLine
     | AttributeAfterExtern String
     | CapabilityWithoutAnnotation
@@ -77,22 +76,22 @@ errorToString error =
     when error is
         ExpectedKeyword keyword ->
             "Expected keyword '" ++ keyword ++ "'"
-        
+
         ExpectedChar char ->
             "Expected character '" ++ String.fromChar char ++ "'"
-        
+
         VariableError varError ->
             Variable.errorToString varError
-        
+
         TypeError typeError ->
             Type.errorToString typeError
-        
+
         ExprError exprError ->
             Expr.errorToString exprError
 
         StringError strError ->
             String.errorToString strError
-        
+
         SpaceError spaceError ->
             Space.errorToString spaceError
 
@@ -113,6 +112,9 @@ errorToString error =
 
         MeasureNotOnValue ->
             "Expected a value declaration with a type annotation after '@measure'"
+
+        CandidateNotOnValue ->
+            "Expected a value declaration with a type annotation after '@candidate'"
 
         AttributeNeedsFreshLine ->
             "Expected the declaration on the line after this attribute"
@@ -216,7 +218,7 @@ declarationValueParser { docs, start, attribute } =
         -- at the `@` a comment written after `@capability` sorted after it.
         Capability_ ->
             Parser.getPosition
-                |> Parser.andThen (\sigStart -> valueParser { capability = True, inline = False, measure = False } sigStart)
+                |> Parser.andThen (\sigStart -> valueParser { capability = True, inline = False, measure = False, candidate = False } sigStart)
                 |> Parser.andThen
                     (\value ->
                         when value is
@@ -238,7 +240,7 @@ declarationValueParser { docs, start, attribute } =
         Inline_ ->
             Parser.oneOf
                 [ Parser.getPosition
-                    |> Parser.andThen (\sigStart -> valueParser { capability = False, inline = True, measure = False } sigStart)
+                    |> Parser.andThen (\sigStart -> valueParser { capability = False, inline = True, measure = False, candidate = False } sigStart)
                     |> Parser.andThen
                         (\value ->
                             when value is
@@ -262,7 +264,7 @@ declarationValueParser { docs, start, attribute } =
         Measure_ ->
             Parser.oneOf
                 [ Parser.getPosition
-                    |> Parser.andThen (\sigStart -> valueParser { capability = False, inline = False, measure = True } sigStart)
+                    |> Parser.andThen (\sigStart -> valueParser { capability = False, inline = False, measure = True, candidate = False } sigStart)
                     |> Parser.andThen
                         (\value ->
                             when value is
@@ -281,17 +283,41 @@ declarationValueParser { docs, start, attribute } =
                 ]
                 |> Parser.map finish
 
+        -- `@candidate` (geng-lang `m4-refine-wrap.md` §WR11) is on an
+        -- annotated value and nothing else, as `@measure` is.
+        Candidate_ ->
+            Parser.oneOf
+                [ Parser.getPosition
+                    |> Parser.andThen (\sigStart -> valueParser { capability = False, inline = False, measure = False, candidate = True } sigStart)
+                    |> Parser.andThen
+                        (\value ->
+                            when value is
+                                Value v ->
+                                    when v.signature is
+                                        Nothing ->
+                                            Parser.problem CandidateNotOnValue
+
+                                        Just _ ->
+                                            Parser.succeed value
+
+                                _ ->
+                                    Parser.succeed value
+                        )
+                , Parser.problem CandidateNotOnValue
+                ]
+                |> Parser.map finish
+
         NoAttribute ->
             Parser.oneOf
                 [ typeParser []
                 , classParser
                 , instanceParser
-                , valueParser { capability = False, inline = False, measure = False } start
+                , valueParser { capability = False, inline = False, measure = False, candidate = False } start
                 ]
                 |> Parser.map finish
 
 
-valueParser : { capability : Bool, inline : Bool, measure : Bool } -> SourcePosition.Position -> Parser Context Error DeclarationValue
+valueParser : { capability : Bool, inline : Bool, measure : Bool, candidate : Bool } -> SourcePosition.Position -> Parser Context Error DeclarationValue
 valueParser attributes start =
     Expr.letDefNamedParser
         |> Parser.mapError ExprError
@@ -302,6 +328,7 @@ valueParser attributes start =
                     , capability = attributes.capability
                     , inline = attributes.inline
                     , measure = attributes.measure
+                    , candidate = attributes.candidate
                     , signature =
                         Maybe.map
                             (\t ->
@@ -336,6 +363,7 @@ type Attribute
     | Capability_
     | Inline_
     | Measure_
+    | Candidate_
     | Affine_
     | Derive (Array (SourcePosition.Located String))
     | Prim_ (SourcePosition.Located String)
@@ -368,6 +396,9 @@ attributeParser =
 
                         "measure" ->
                             Parser.map (\_ -> Measure_) bareAttributeEndParser
+
+                        "candidate" ->
+                            Parser.map (\_ -> Candidate_) bareAttributeEndParser
 
                         "extern" ->
                             Parser.map Extern_ (attributeArgsParser (externArgsParser (attributeAt name) False))

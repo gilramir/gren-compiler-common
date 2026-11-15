@@ -1,39 +1,39 @@
 module Compiler.Ast.Source exposing
-    ( Expression
-    , Expression_ (..)
-    , VarType (..)
-    , IfBranch
-    , WhenBranch
-    , RecordField
-    , Def (..)
-    , DefineRecord
-    , Pattern
-    , Pattern_ (..)
-    , PRecordField
-    , Type
-    , Type_ (..)
-    , TRecordField
-    , Refinement
+    ( Alias
     , Annotation
+    , BinopAssociativity(..)
+    , Class
+    , ClassMethod
     , Constraint
-    , Alias
+    , Def(..)
+    , DefineRecord
+    , Exposed(..)
+    , Exposing(..)
+    , Expression
+    , Expression_(..)
+    , Extern
+    , ExternImpl
+    , IfBranch
+    , Import
+    , Infix
+    , Instance
+    , Module
+    , ModuleDeclaration
+    , PRecordField
+    , Pattern
+    , Pattern_(..)
+    , Prim
+    , Privacy(..)
+    , RecordField
+    , Refinement
+    , TRecordField
+    , Type
+    , Type_(..)
     , Union
     , UnionVariant
     , Value
-    , Class
-    , ClassMethod
-    , Instance
-    , Prim
-    , Extern
-    , ExternImpl
-    , Module
-    , ModuleDeclaration
-    , Exposing (..)
-    , Exposed (..)
-    , Privacy (..)
-    , Import
-    , Infix
-    , BinopAssociativity (..)
+    , VarType(..)
+    , WhenBranch
     )
 
 {-| The Abstract Syntax Tree (AST) of Gren.
@@ -42,12 +42,11 @@ module Compiler.Ast.Source exposing
 
 -}
 
-import Compiler.SourcePosition as SourcePosition
 import Compiler.Parse.Number as Number
+import Compiler.SourcePosition as SourcePosition
 
 
-{-|
--}
+{-| -}
 type alias Expression =
     SourcePosition.Located Expression_
 
@@ -58,95 +57,91 @@ indentation included, so that a formatter can write it as the author did
 (geng-lang D602). A number keeps its text the same way, in `Number.Outcome`.
 -}
 type Expression_
-  = CharLiteral { value : Char, text : String }
-  | StringLiteral { value : String, text : String }
-  | NumberLiteral Number.Outcome
-  | Var
-    { varType : VarType
-    , name : String
-    }
-  | VarQual
-    { varType : VarType
-    , qualifier : String
-    , name : String
-    }
-  | ArrayLiteral (Array Expression)
-  | Record (Array RecordField)
-  | Update
-    { record : Expression
-    , newValues : Array RecordField
-    }
-  | Operator String
-  | Negate Expression
-  | Binops
-    { left : Expression
-    , operator : SourcePosition.Located String
-    , right : Expression
-    }
-  | Lambda
-    { patterns : Array Pattern
-    , body : Expression
-    }
-  | Call
-    { fn : Expression
-    , args : Array Expression
-    }
-  | Let
-    { defs : Array (SourcePosition.Located Def)
-    , body : Expression
-    }
-  | If
-    { branches : Array IfBranch
-    , elseBranch : Expression
-    }
-  | When
-    { expression : Expression
-    , branches : Array WhenBranch
-    }
-  | Accessor String
-  | Access
-    { expression : Expression
-    , accessor : String
-    }
-  | Parens Expression
-  | Annotated
-    { expression : Expression
-    , annotation : Type
-    }
-  | -- | `meant REASON EXPRESSION` (geng-lang m4-refine-t1.md TO23): a
+    = CharLiteral { value : Char, text : String }
+    | StringLiteral { value : String, text : String }
+    | NumberLiteral Number.Outcome
+    | Var
+        { varType : VarType
+        , name : String
+        }
+    | VarQual
+        { varType : VarType
+        , qualifier : String
+        , name : String
+        }
+    | ArrayLiteral (Array Expression)
+    | Record (Array RecordField)
+    | Update
+        { record : Expression
+        , newValues : Array RecordField
+        }
+    | Operator String
+    | Negate Expression
+    | Binops
+        { left : Expression
+        , operator : SourcePosition.Located String
+        , right : Expression
+        }
+    | Lambda
+        { patterns : Array Pattern
+        , body : Expression
+        }
+    | Call
+        { fn : Expression
+        , args : Array Expression
+        }
+    | Let
+        { defs : Array (SourcePosition.Located Def)
+        , body : Expression
+        }
+    | If
+        { branches : Array IfBranch
+        , elseBranch : Expression
+        }
+    | When
+        { expression : Expression
+        , branches : Array WhenBranch
+        }
+    | Accessor String
+    | Access
+        { expression : Expression
+        , accessor : String
+        }
+    | Parens Expression
+    | Annotated
+        { expression : Expression
+        , annotation : Type
+        }
+    -- | `meant REASON EXPRESSION` (geng-lang m4-refine-t1.md TO23): a
     -- fallback meant, its reason a constructor as written, qualified or
     -- not (`Input`, `Reason.Input`); its value is the expression's.
-    Meant
-    { reason : SourcePosition.Located String
-    , expression : Expression
-    }
+    | Meant
+        { reason : SourcePosition.Located String
+        , expression : Expression
+        }
 
 
-{-|
--}
+{-| -}
 type VarType
     = LowVar
     | CapVar
 
 
-{-|
--}
+{-| -}
 type alias IfBranch =
     { test : Expression
     , body : Expression
     }
 
 
-{-|
--}
+{-| -}
 type alias WhenBranch =
     { pattern : Pattern
     , body : Expression
     }
 
 
-{-|
--}
+{-| -}
 type alias RecordField =
     { field : SourcePosition.Located String
     , value : Expression
@@ -156,18 +151,16 @@ type alias RecordField =
 -- DEFINITIONS
 
 
-{-|
--}
+{-| -}
 type Def
-  = Define DefineRecord
-  | Destruct
-    { pattern : Pattern
-    , body : Expression
-    }
+    = Define DefineRecord
+    | Destruct
+        { pattern : Pattern
+        , body : Expression
+        }
 
 
-{-|
--}
+{-| -}
 type alias DefineRecord =
     { name : SourcePosition.Located String
     , args : Array Pattern
@@ -178,43 +171,41 @@ type alias DefineRecord =
 
 -- PATTERN
 
-{-|
--}
-type alias Pattern
-    = SourcePosition.Located Pattern_
+
+{-| -}
+type alias Pattern =
+    SourcePosition.Located Pattern_
 
 
-{-|
--}
+{-| -}
 type Pattern_
-  = PAnything String
-  | PVar String
-  | PRecord (Array PRecordField)
-  | PAlias
-    { pattern : Pattern
-    , name : SourcePosition.Located String
-    }
-  | PCtor
-    { name : SourcePosition.Located String
-    , arg : Maybe Pattern
-    }
-  | PCtorQual
-    { varRegion : SourcePosition.Region
-    , module_ : String
-    , name : String
-    , arg : Maybe Pattern
-    }
-  | PArray (Array Pattern)
-  | PChr { value : Char, text : String }
-  | PStr { value : String, text : String }
-  | PInt
-    { text : String
-    , isHex : Bool
-    }
+    = PAnything String
+    | PVar String
+    | PRecord (Array PRecordField)
+    | PAlias
+        { pattern : Pattern
+        , name : SourcePosition.Located String
+        }
+    | PCtor
+        { name : SourcePosition.Located String
+        , arg : Maybe Pattern
+        }
+    | PCtorQual
+        { varRegion : SourcePosition.Region
+        , module_ : String
+        , name : String
+        , arg : Maybe Pattern
+        }
+    | PArray (Array Pattern)
+    | PChr { value : Char, text : String }
+    | PStr { value : String, text : String }
+    | PInt
+        { text : String
+        , isHex : Bool
+        }
 
 
-{-|
--}
+{-| -}
 type alias PRecordField =
     { field : SourcePosition.Located String
     , pattern : Maybe Pattern
@@ -223,8 +214,8 @@ type alias PRecordField =
 
 -- TYPE
 
-{-|
--}
+
+{-| -}
 type alias Type =
     SourcePosition.Located Type_
 
@@ -237,32 +228,32 @@ predicate is an ordinary expression, read by the type parser's own grammar
 value.
 -}
 type Type_
-  = TLambda
-    { from : Type
-    , to : Type
-    }
-  | TVar String
-  | TType
-    { name : SourcePosition.Located String
-    , args : Array Type
-    }
-  | TTypeQual
-    { varRegion : SourcePosition.Region
-    , qualifier : String
-    , name : String
-    , args : Array Type
-    }
-  | TRecord
-    { fields : Array TRecordField
-    , extending : Maybe (SourcePosition.Located String)
-    }
-  | TParens Type
-  | TNamed
-    { takenAt : Maybe SourcePosition.Position
-    , name : SourcePosition.Located String
-    , type_ : Type
-    , refinement : Maybe Refinement
-    }
+    = TLambda
+        { from : Type
+        , to : Type
+        }
+    | TVar String
+    | TType
+        { name : SourcePosition.Located String
+        , args : Array Type
+        }
+    | TTypeQual
+        { varRegion : SourcePosition.Region
+        , qualifier : String
+        , name : String
+        , args : Array Type
+        }
+    | TRecord
+        { fields : Array TRecordField
+        , extending : Maybe (SourcePosition.Located String)
+        }
+    | TParens Type
+    | TNamed
+        { takenAt : Maybe SourcePosition.Position
+        , name : SourcePosition.Located String
+        , type_ : Type
+        , refinement : Maybe Refinement
+        }
 
 
 {-| A refinement: its predicate, and where its `where` is, which a formatter
@@ -310,13 +301,13 @@ type alias Constraint =
 
 -- Declarations
 
-{-|
--}
+
+{-| -}
 type alias Alias =
-  { name : SourcePosition.Located String
-  , vars : Array (SourcePosition.Located String)
-  , type_ : Type
-  }
+    { name : SourcePosition.Located String
+    , vars : Array (SourcePosition.Located String)
+    , type_ : Type
+    }
 
 
 {-| `keyword` is where `type` starts. Without `@derive` or `@affine` that is
@@ -326,47 +317,48 @@ keyword can be any number of rows below, past comments, so it is recorded.
 D921).
 -}
 type alias Union =
-  { name : SourcePosition.Located String
-  , vars : Array (SourcePosition.Located String)
-  , variants : Array (SourcePosition.Located UnionVariant)
-  , derives : Array (SourcePosition.Located String)
-  , affine : Bool
-  , keyword : SourcePosition.Position
-  }
+    { name : SourcePosition.Located String
+    , vars : Array (SourcePosition.Located String)
+    , variants : Array (SourcePosition.Located UnionVariant)
+    , derives : Array (SourcePosition.Located String)
+    , affine : Bool
+    , keyword : SourcePosition.Position
+    }
 
 
 {-| A variant: its doc comment, if it has one (its text without `{-|` and
 `-}`, geng-lang `m4-refine-t1.md` TO24), its name and its argument.
 -}
 type alias UnionVariant =
-  { doc : Maybe (SourcePosition.Located String)
-  , name : SourcePosition.Located String
-  , payload : Maybe Type
-  }
+    { doc : Maybe (SourcePosition.Located String)
+    , name : SourcePosition.Located String
+    , payload : Maybe Type
+    }
 
 
-{-|
--}
+{-| -}
 type alias Value =
-  { name : SourcePosition.Located String
-  -- Declared under `@capability` (D258): only the application and the
-  -- declaring package may refer to it.
-  , capability : Bool
-  -- Declared under `@inline` (D545), which only `core` writes: the inliner
-  -- opens every call to it whatever its size.
-  , inline : Bool
-  -- Declared under `@measure` (geng-lang `m4-refine-t1.md` TO14): a
-  -- refinement's predicate may call it.
-  , measure : Bool
-  , signature :
-    Maybe
-      { start : SourcePosition.Position
-      , constraints : Array Constraint
-      , type_ : SourcePosition.Located Type_
-      }
-  , args : Array Pattern
-  , body : Expression
-  }
+    { name : SourcePosition.Located String
+    -- Declared under `@capability` (D258): only the application and the
+    -- declaring package may refer to it.
+    , capability : Bool
+    -- Declared under `@inline` (D545), which only `core` writes: the inliner
+    -- opens every call to it whatever its size.
+    , inline : Bool
+    -- Declared under `@measure` (geng-lang `m4-refine-t1.md` TO14): a
+    -- refinement's predicate may call it.
+    , measure : Bool
+    -- Declared under `@candidate` (geng-lang `m4-refine-wrap.md` §WR11): its
+    -- annotation's refinements are asked of the checker, not required.
+    , candidate : Bool
+    , signature : Maybe
+        { start : SourcePosition.Position
+        , constraints : Array Constraint
+        , type_ : SourcePosition.Located Type_
+        }
+    , args : Array Pattern
+    , body : Expression
+    }
 
 
 {-| `class Eq a where` and the annotations under it.
@@ -375,18 +367,17 @@ Methods are annotations and nothing else. A default implementation would be a
 decision the language has not taken, and there is no shape here to put one in.
 -}
 type alias Class =
-  { name : SourcePosition.Located String
-  , var : SourcePosition.Located String
-  , methods : Array (SourcePosition.Located ClassMethod)
-  }
+    { name : SourcePosition.Located String
+    , var : SourcePosition.Located String
+    , methods : Array (SourcePosition.Located ClassMethod)
+    }
 
 
-{-|
--}
+{-| -}
 type alias ClassMethod =
-  { name : SourcePosition.Located String
-  , signature : Annotation
-  }
+    { name : SourcePosition.Located String
+    , signature : Annotation
+    }
 
 
 {-| `instance Eq a => Eq (Array a) where` and the definitions under it.
@@ -399,10 +390,10 @@ Methods take no annotation of their own — the class already gave each one a
 type.
 -}
 type alias Instance =
-  { constraints : Array Constraint
-  , head : Type
-  , methods : Array (SourcePosition.Located DefineRecord)
-  }
+    { constraints : Array Constraint
+    , head : Type
+    , methods : Array (SourcePosition.Located DefineRecord)
+    }
 
 
 {-| `@prim("i32_add")` and the annotation under it (`core.md` C13).
@@ -414,10 +405,10 @@ never constrained -- `@prim("i32_add") add : Num a => a -> a -> a` is not a
 type error to be caught later, it is a sentence the language does not have.
 -}
 type alias Prim =
-  { name : SourcePosition.Located String
-  , primName : SourcePosition.Located String
-  , signature : Type
-  }
+    { name : SourcePosition.Located String
+    , primName : SourcePosition.Located String
+    , signature : Type
+    }
 
 
 {-| `@extern(js, "geng_time", "now")` rows and the annotation under them
@@ -433,16 +424,15 @@ of names parse here, as they do in the Haskell front end.
 annotation, which a backend with no row for its language compiles.
 -}
 type alias Extern =
-  { name : SourcePosition.Located String
-  , impls : Array ExternImpl
-  , signature : Type
-  , definition :
-    Maybe
-      { name : SourcePosition.Located String
-      , args : Array Pattern
-      , body : Expression
-      }
-  }
+    { name : SourcePosition.Located String
+    , impls : Array ExternImpl
+    , signature : Type
+    , definition : Maybe
+        { name : SourcePosition.Located String
+        , args : Array Pattern
+        , body : Expression
+        }
+    }
 
 
 {-| One attribute row: `@extern` or `@externPure`, a language, and its names.
@@ -450,86 +440,79 @@ type alias Extern =
 above the language.
 -}
 type alias ExternImpl =
-  { at : SourcePosition.Position
-  , pure : Bool
-  , language : SourcePosition.Located String
-  , names : Array (SourcePosition.Located String)
-  }
+    { at : SourcePosition.Position
+    , pure : Bool
+    , language : SourcePosition.Located String
+    , names : Array (SourcePosition.Located String)
+    }
 
 
 -- Module
 
-{-|
--}
+
+{-| -}
 type alias Module =
-  { name : SourcePosition.Located String
-  , exports : Exposing
-  , docs : Maybe (SourcePosition.Located String)
-  , imports : Array (SourcePosition.Located Import)
-  , values : Array (ModuleDeclaration Value)
-  , classes : Array (ModuleDeclaration Class)
-  , instances : Array (ModuleDeclaration Instance)
-  , unions : Array (ModuleDeclaration Union)
-  , aliases : Array (ModuleDeclaration Alias)
-  , prims : Array (ModuleDeclaration Prim)
-  , externs : Array (ModuleDeclaration Extern)
-  , binops : Array (SourcePosition.Located Infix)
-  }
-
-
-{-|
--}
-type alias ModuleDeclaration v =
-  SourcePosition.Located
-    { docs : Maybe (SourcePosition.Located String)
-    , value : v
+    { name : SourcePosition.Located String
+    , exports : Exposing
+    , docs : Maybe (SourcePosition.Located String)
+    , imports : Array (SourcePosition.Located Import)
+    , values : Array (ModuleDeclaration Value)
+    , classes : Array (ModuleDeclaration Class)
+    , instances : Array (ModuleDeclaration Instance)
+    , unions : Array (ModuleDeclaration Union)
+    , aliases : Array (ModuleDeclaration Alias)
+    , prims : Array (ModuleDeclaration Prim)
+    , externs : Array (ModuleDeclaration Extern)
+    , binops : Array (SourcePosition.Located Infix)
     }
 
 
-{-|
--}
+{-| -}
+type alias ModuleDeclaration v =
+    SourcePosition.Located
+        { docs : Maybe (SourcePosition.Located String)
+        , value : v
+        }
+
+
+{-| -}
 type Exposing
-  = Open
-  | Explicit (Array Exposed)
+    = Open
+    | Explicit (Array Exposed)
 
 
-{-|
--}
+{-| -}
 type Exposed
-  = ExposedLower (SourcePosition.Located String)
-  | ExposedUpper { name : SourcePosition.Located String, privacy : Privacy }
-  | ExposedOperator (SourcePosition.Located String)
+    = ExposedLower (SourcePosition.Located String)
+    | ExposedUpper { name : SourcePosition.Located String, privacy : Privacy }
+    | ExposedOperator (SourcePosition.Located String)
 
 
-{-|
--}
+{-| -}
 type Privacy
-  = Public
-  | Private
+    = Public
+    | Private
 
 
-{-|
--}
+{-| -}
 type alias Import =
-  { module_ : SourcePosition.Located String
-  , alias : Maybe String
-  , expose : Exposing
-  }
+    { module_ : SourcePosition.Located String
+    , alias : Maybe String
+    , expose : Exposing
+    }
 
 
-{-|
--}
+{-| -}
 type alias Infix =
-  { fn : String
-  , symbol : String
-  , associativity : BinopAssociativity
-  , precedence : Int
-  }
+    { fn : String
+    , symbol : String
+    , associativity : BinopAssociativity
+    , precedence : Int
+    }
 
 
-{-|
--}
+{-| -}
 type BinopAssociativity
-  = OpALeft
-  | OpANone
-  | OpARight
+    = OpALeft
+    | OpANone
+    | OpARight
