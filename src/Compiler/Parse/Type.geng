@@ -489,8 +489,8 @@ lowerOperand start name =
                 else if Array.member name remainders then
                     Parser.succeed
                         (\divisor dividend -> SourcePosition.at start dividend.end (AST.Call { fn = var, args = [ divisor, dividend ] }))
-                        |> Parser.keep (Parser.lazy (\_ -> operand))
-                        |> Parser.keep (Parser.lazy (\_ -> operand))
+                        |> Parser.keep (Parser.lazy (\_ -> remainderOperand))
+                        |> Parser.keep (Parser.lazy (\_ -> remainderOperand))
 
                 else
                     Parser.oneOf
@@ -506,6 +506,32 @@ lowerOperand start name =
                             |> Parser.skip spaceParser
                         , Parser.succeed var
                         ]
+            )
+
+
+{-| A remainder's divisor or dividend, and the space after it: a name and
+its fields, a negation of one, or any other operand. A name is never read as
+a call here, so that in `modBy d n` the `d` is not taken as applied to `n`
+(found by the formatter's random modules); a measure of a name,
+`Array.length a`, is still read as one, since its head says it is a call
+(geng-lang `m4-refine-wrap.md` §WR9).
+-}
+remainderOperand : Parser Context Error AST.Expression
+remainderOperand =
+    Parser.getPosition
+        |> Parser.andThen
+            (\start ->
+                Parser.oneOf
+                    [ Parser.succeed (\name end -> SourcePosition.at start end (AST.Var { name = name, varType = AST.LowVar }))
+                        |> Parser.keep (Parser.mapError VariableError Variable.lowerCase)
+                        |> Parser.keep Parser.getPosition
+                        |> Parser.andThen predicateFields
+                        |> Parser.skip spaceParser
+                    , Parser.succeed (\inner -> SourcePosition.at start inner.end (AST.Negate inner))
+                        |> Parser.skip (Parser.chompChar '-' BadRefinement)
+                        |> Parser.keep (Parser.lazy (\_ -> remainderOperand))
+                    , Parser.lazy (\_ -> operand)
+                    ]
             )
 
 
