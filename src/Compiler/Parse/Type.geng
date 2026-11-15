@@ -370,7 +370,9 @@ namedHead =
 expression parser, which imports this module (D815). It holds what D808
 allows: integer literals, names, a qualified function applied to one name (a
 measure, `Bytes.length b`), `True`, `False`, `not`, unary `-`, the operators
-`+ - * < <= > >= == /= && ||` and parentheses.
+`+ - * // < <= > >= == /= && ||` and parentheses; and since Dgmk6 the
+remainders `modBy`, `divFloor` and `remainderBy` of two operands (geng-lang
+`m4-refine-wrap.md` §WR5).
 
 The operators are read as a chain nested to the left, as the expression parser
 reads them, and are given their precedence where every chain is, so a
@@ -407,7 +409,7 @@ predicateOperator =
         |> Parser.mapError (\_ -> BadRefinement)
         |> Parser.andThen
             (\op ->
-                if Array.member op [ "+", "-", "*", "<", "<=", ">", ">=", "==", "/=", "&&", "||" ] then
+                if Array.member op [ "+", "-", "*", "//", "<", "<=", ">", ">=", "==", "/=", "&&", "||" ] then
                     Parser.succeed op
 
                 else
@@ -470,7 +472,7 @@ lowerOperand start name =
         |> Parser.keep Parser.getPosition
         |> Parser.andThen
             (\var ->
-                if name == "not" then
+                if name == "not" || Array.member name remainders then
                     Parser.succeed var
 
                 else
@@ -482,6 +484,12 @@ lowerOperand start name =
                 if name == "not" then
                     Parser.succeed
                         (\arg -> SourcePosition.at start arg.end (AST.Call { fn = var, args = [ arg ] }))
+                        |> Parser.keep (Parser.lazy (\_ -> operand))
+
+                else if Array.member name remainders then
+                    Parser.succeed
+                        (\divisor dividend -> SourcePosition.at start dividend.end (AST.Call { fn = var, args = [ divisor, dividend ] }))
+                        |> Parser.keep (Parser.lazy (\_ -> operand))
                         |> Parser.keep (Parser.lazy (\_ -> operand))
 
                 else
@@ -499,6 +507,14 @@ lowerOperand start name =
                         , Parser.succeed var
                         ]
             )
+
+
+{-| The remainders a predicate may call with two operands, divisor first
+(geng-lang `m4-refine-wrap.md` §WR5).
+-}
+remainders : Array String
+remainders =
+    [ "modBy", "divFloor", "remainderBy" ]
 
 
 {-| A name's fields, each `.field` glued to what it reads, as an expression's
