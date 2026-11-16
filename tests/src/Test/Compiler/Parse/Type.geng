@@ -89,6 +89,18 @@ tests =
             Run.run PT.expression Context.empty "(s : Shape where not (isEmpty s) && corners s.inner == 4)"
                 |> Result.map named
                 |> Expect.equal (Ok (Just { takenAt = Nothing, name = "s" }))
+        , test "A remainder of two operands in a predicate (geng-lang m4-refine-wrap.md §WR5)" <| \_ ->
+            Run.run PT.expression Context.empty "(x : Int where modBy 8 x == 0 && divFloor 2 (x + 1) < 4)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "x" }))
+        , test "`Bitwise`'s methods in a predicate, qualified, two operands or one (geng-lang m4-refine-wrap.md §WR12)" <| \_ ->
+            Run.run PT.expression Context.empty "(x : Int where Bitwise.and 255 x == x && Bitwise.complement x < 0)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "x" }))
+        , test "A field's predicate ends at the comma after a shift or a remainder (geng-lang m4-refine-wrap.md §WR12)" <| \_ ->
+            Run.run PT.expression Context.empty "{ a : Int where Bitwise.shiftRightBy 3 a == 1, b : Int where modBy 4 b == 0 }"
+                |> Result.map fieldWheres
+                |> Expect.equal (Ok [ { field = "a", whereAt = Just { row = 1, col = 11 } }, { field = "b", whereAt = Just { row = 1, col = 56 } } ])
         , test "A name before an operator is still a name, not a call" <| \_ ->
             Run.run PT.expression Context.empty "(n : Int where n < limit)"
                 |> Result.map named

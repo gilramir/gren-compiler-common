@@ -242,6 +242,40 @@ tests =
                         = Empty
                     """
             ]
+        , describe "@candidate (geng-lang m4-refine-wrap.md §WR11)"
+            [ test "on an annotated value" <| \_ ->
+                """
+                @candidate
+                half : (n : Int where 0 <= n) -> (r : Int where r <= n)
+                half n =
+                    n // 2
+                """
+                    |> Run.run PD.parser Context.empty
+                    |> Result.map
+                        (\decl ->
+                            when decl.value is
+                                PD.Value v ->
+                                    Just { candidate = v.candidate, measure = v.measure, inline = v.inline }
+
+                                _ ->
+                                    Nothing
+                        )
+                    |> Expect.equal (Ok (Just { candidate = True, measure = False, inline = False }))
+            , test "on a value without an annotation is refused" <| \_ ->
+                expectRefused
+                    """
+                    @candidate
+                    half n =
+                        n // 2
+                    """
+            , test "on a custom type is refused" <| \_ ->
+                expectRefused
+                    """
+                    @candidate
+                    type Shape
+                        = Empty
+                    """
+            ]
         , describe "@derive"
             [ test "on a custom type" <| \_ ->
                 expectDecl

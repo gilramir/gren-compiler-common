@@ -431,6 +431,7 @@ tests =
                                   , capability = False
                                   , inline = False
                                   , measure = False
+                                  , candidate = False
                                   , signature =
                                       Just
                                           { constraints = []
@@ -618,6 +619,7 @@ tests =
                                     , capability = False
                                     , inline = False
                                     , measure = False
+                                    , candidate = False
                                     , signature =
                                         Just
                                             { constraints = []
@@ -725,6 +727,7 @@ tests =
                                     , capability = False
                                     , inline = False
                                     , measure = False
+                                    , candidate = False
                                     , signature =
                                         Just
                                             { constraints = []
@@ -842,6 +845,7 @@ tests =
                                 , capability = False
                                 , inline = False
                                 , measure = False
+                                , candidate = False
                                 , signature =
                                     Just
                                         { constraints = []
