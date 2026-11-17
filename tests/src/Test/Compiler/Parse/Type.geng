@@ -97,6 +97,17 @@ tests =
             Run.run PT.expression Context.empty "(x : Int where Bitwise.and 255 x == x && Bitwise.complement x < 0)"
                 |> Result.map named
                 |> Expect.equal (Ok (Just { takenAt = Nothing, name = "x" }))
+        , test "`Bitwise.popCount` of one operand as a remainder's, and an operation between two values (geng-lang m4-refine-wrap.md §WR27)" <| \_ ->
+            Run.run PT.expression Context.empty "(x : Int where Bitwise.popCount (x - 1) < Bitwise.popCount -x && Bitwise.and x y == 0)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "x" }))
+        , test "`Bitwise.popCount` of a measure unparenthesized is refused, as code reads it as two arguments (geng-lang m4-refine-wrap.md §WR27)" <| \_ ->
+            when Run.run PT.expression Context.empty "(n : Int where n == Bitwise.popCount Array.length items)" is
+                Ok _ ->
+                    Expect.fail "Expected an error"
+
+                Err problems ->
+                    Expect.equal True (Array.member PT.BadRefinement (Array.map .problem problems))
         , test "A field's predicate ends at the comma after a shift or a remainder (geng-lang m4-refine-wrap.md §WR12)" <| \_ ->
             Run.run PT.expression Context.empty "{ a : Int where Bitwise.shiftRightBy 3 a == 1, b : Int where modBy 4 b == 0 }"
                 |> Result.map fieldWheres

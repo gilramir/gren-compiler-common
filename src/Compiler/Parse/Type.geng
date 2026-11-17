@@ -558,11 +558,12 @@ remainders =
 
 
 {-| `Bitwise`'s methods a predicate may call, by a qualified name (geng-lang
-`m4-refine-wrap.md` §WR12): `complement` of one operand, the rest of two.
+`m4-refine-wrap.md` §WR12, §WR27): `complement` and `popCount` of one
+operand, the rest of two.
 -}
 bitOperations : Array String
 bitOperations =
-    [ "and", "or", "xor", "complement", "shiftLeftBy", "shiftRightBy", "shiftRightZfBy" ]
+    [ "and", "or", "xor", "complement", "popCount", "shiftLeftBy", "shiftRightBy", "shiftRightZfBy" ]
 
 
 {-| A name's fields, each `.field` glued to what it reads, as an expression's
@@ -601,13 +602,14 @@ upperOperand start var =
                     Variable.Qualified { module_, name } ->
                         if Array.member name bitOperations then
                             -- `Bitwise.and c x` and the rest of two operands,
-                            -- `Bitwise.complement x` of one, each operand as a
-                            -- remainder's (geng-lang `m4-refine-wrap.md` §WR12)
+                            -- `Bitwise.complement x` and `Bitwise.popCount x`
+                            -- of one, each operand as a remainder's (geng-lang
+                            -- `m4-refine-wrap.md` §WR12, §WR27)
                             let
                                 fn =
                                     SourcePosition.at start end (AST.VarQual { varType = AST.LowVar, qualifier = module_, name = name })
                             in
-                            if name == "complement" then
+                            if name == "complement" || name == "popCount" then
                                 Parser.succeed (\arg -> SourcePosition.at start arg.end (AST.Call { fn = fn, args = [ arg ] }))
                                     |> Parser.skip spaceParser
                                     |> Parser.keep (Parser.lazy (\_ -> remainderOperand))
