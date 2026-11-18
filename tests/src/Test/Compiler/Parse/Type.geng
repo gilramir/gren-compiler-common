@@ -108,6 +108,10 @@ tests =
 
                 Err problems ->
                     Expect.equal True (Array.member PT.BadRefinement (Array.map .problem problems))
+        , test "`^` in a predicate, beside `*` and of a negative base in parentheses (geng-lang m4-refine-wrap.md §WR37)" <| \_ ->
+            Run.run PT.expression Context.empty "(a : BigInt where 0 <= a && a < 2 ^ 128 && a /= 2 * 2 ^ 3 + (-2) ^ 3)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "a" }))
         , test "A field's predicate ends at the comma after a shift or a remainder (geng-lang m4-refine-wrap.md §WR12)" <| \_ ->
             Run.run PT.expression Context.empty "{ a : Int where Bitwise.shiftRightBy 3 a == 1, b : Int where modBy 4 b == 0 }"
                 |> Result.map fieldWheres

@@ -374,7 +374,8 @@ measure, `Bytes.length b`), `True`, `False`, `not`, unary `-`, the operators
 remainders `modBy`, `divFloor` and `remainderBy` of two operands (geng-lang
 `m4-refine-wrap.md` §WR5); and since Dgmk12 `Bitwise`'s methods, qualified
 as code writes them, `Bitwise.and 255 x`, each operand as a remainder's is
-(§WR12).
+(§WR12); and since Dgmk31 `^`, which the compiler folds when both sides are
+literals and refuses otherwise (§WR37).
 
 The operators are read as a chain nested to the left, as the expression parser
 reads them, and are given their precedence where every chain is, so a
@@ -411,7 +412,7 @@ predicateOperator =
         |> Parser.mapError (\_ -> BadRefinement)
         |> Parser.andThen
             (\op ->
-                if Array.member op [ "+", "-", "*", "//", "<", "<=", ">", ">=", "==", "/=", "&&", "||" ] then
+                if Array.member op [ "+", "-", "*", "//", "^", "<", "<=", ">", ">=", "==", "/=", "&&", "||" ] then
                     Parser.succeed op
 
                 else
