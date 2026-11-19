@@ -559,13 +559,34 @@ remainders =
     [ "modBy", "divFloor", "remainderBy" ]
 
 
-{-| `Bitwise`'s methods a predicate may call, by a qualified name (geng-lang
-`m4-refine-wrap.md` §WR12, §WR27): `complement` and `popCount` of one
-operand, the rest of two.
+{-| The qualified functions a predicate may call with operands that are not
+paths: `Bitwise`'s methods (geng-lang `m4-refine-wrap.md` §WR12, §WR27), and
+the `BigInt` module's exact functions (§WR43), each by its name, as the
+compiler's parser reads them. Those of one operand are `oneOperand`; the rest
+take two.
 -}
 bitOperations : Array String
 bitOperations =
-    [ "and", "or", "xor", "complement", "popCount", "shiftLeftBy", "shiftRightBy", "shiftRightZfBy" ]
+    oneOperand
+        ++ [ "and"
+           , "or"
+           , "xor"
+           , "shiftLeftBy"
+           , "shiftRightBy"
+           , "shiftRightZfBy"
+           , "add"
+           , "mul"
+           , "subBy"
+           , "maskTo"
+           , "toSigned"
+           , "fitsSigned"
+           , "fitsUnsigned"
+           ]
+
+
+oneOperand : Array String
+oneOperand =
+    [ "complement", "popCount", "negate", "fromInt", "fromInt64", "isZero", "isNegative", "isEven", "isOdd" ]
 
 
 {-| A name's fields, each `.field` glued to what it reads, as an expression's
@@ -606,12 +627,13 @@ upperOperand start var =
                             -- `Bitwise.and c x` and the rest of two operands,
                             -- `Bitwise.complement x` and `Bitwise.popCount x`
                             -- of one, each operand as a remainder's (geng-lang
-                            -- `m4-refine-wrap.md` §WR12, §WR27)
+                            -- `m4-refine-wrap.md` §WR12, §WR27); `BigInt`'s
+                            -- the same (§WR43)
                             let
                                 fn =
                                     SourcePosition.at start end (AST.VarQual { varType = AST.LowVar, qualifier = module_, name = name })
                             in
-                            if name == "complement" || name == "popCount" then
+                            if Array.member name oneOperand then
                                 Parser.succeed (\arg -> SourcePosition.at start arg.end (AST.Call { fn = fn, args = [ arg ] }))
                                     |> Parser.skip spaceParser
                                     |> Parser.keep (Parser.lazy (\_ -> remainderOperand))

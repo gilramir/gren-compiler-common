@@ -108,6 +108,21 @@ tests =
 
                 Err problems ->
                     Expect.equal True (Array.member PT.BadRefinement (Array.map .problem problems))
+        , test "`BigInt`'s functions in a predicate, a width and a value, or one operand (geng-lang m4-refine-wrap.md §WR43)" <| \_ ->
+            Run.run PT.expression Context.empty "(r : BigInt where BigInt.fitsUnsigned 64 r && BigInt.isEven (r - 1) && r == BigInt.add (BigInt.shiftLeftBy 32 hi) lo)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "r" }))
+        , test "`BigInt.fromInt` of one operand, a name, beside a comparison (geng-lang m4-refine-wrap.md §WR43)" <| \_ ->
+            Run.run PT.expression Context.empty "(r : BigInt where r == BigInt.fromInt n && BigInt.maskTo w r == r)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "r" }))
+        , test "`BigInt.fitsUnsigned` of a measure unparenthesized is refused, as code reads it as three arguments (geng-lang m4-refine-wrap.md §WR43)" <| \_ ->
+            when Run.run PT.expression Context.empty "(r : BigInt where BigInt.fitsUnsigned Array.length items r)" is
+                Ok _ ->
+                    Expect.fail "Expected an error"
+
+                Err problems ->
+                    Expect.equal True (Array.member PT.BadRefinement (Array.map .problem problems))
         , test "`^` in a predicate, beside `*` and of a negative base in parentheses (geng-lang m4-refine-wrap.md §WR37)" <| \_ ->
             Run.run PT.expression Context.empty "(a : BigInt where 0 <= a && a < 2 ^ 128 && a /= 2 * 2 ^ 3 + (-2) ^ 3)"
                 |> Result.map named
