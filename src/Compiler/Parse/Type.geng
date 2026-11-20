@@ -561,8 +561,8 @@ remainders =
 
 {-| The qualified functions a predicate may call with operands that are not
 paths: `Bitwise`'s methods (geng-lang `m4-refine-wrap.md` §WR12, §WR27), and
-the `BigInt` module's exact functions (§WR43), each by its name, as the
-compiler's parser reads them. Those of one operand are `oneOperand`; the rest
+the `BigInt` module's exact functions (§WR43), and a container's `member`
+(§WR47), each by its name, as the compiler's parser reads them. Those of one operand are `oneOperand`; the rest
 take two.
 -}
 bitOperations : Array String
@@ -581,6 +581,7 @@ bitOperations =
            , "toSigned"
            , "fitsSigned"
            , "fitsUnsigned"
+           , "member"
            ]
 
 

@@ -123,6 +123,10 @@ tests =
 
                 Err problems ->
                     Expect.equal True (Array.member PT.BadRefinement (Array.map .problem problems))
+        , test "A container's `member` in a callback's predicate, naming an argument after it (geng-lang m4-refine-wrap.md §WR47)" <| \_ ->
+            Run.run PT.expression Context.empty "(x : a where Array.member x items && Dict.member x d)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "x" }))
         , test "`^` in a predicate, beside `*` and of a negative base in parentheses (geng-lang m4-refine-wrap.md §WR37)" <| \_ ->
             Run.run PT.expression Context.empty "(a : BigInt where 0 <= a && a < 2 ^ 128 && a /= 2 * 2 ^ 3 + (-2) ^ 3)"
                 |> Result.map named
