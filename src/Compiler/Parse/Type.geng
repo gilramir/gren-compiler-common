@@ -582,12 +582,14 @@ bitOperations =
            , "fitsSigned"
            , "fitsUnsigned"
            , "member"
+           , "min"
+           , "max"
            ]
 
 
 oneOperand : Array String
 oneOperand =
-    [ "complement", "popCount", "negate", "fromInt", "fromInt64", "isZero", "isNegative", "isEven", "isOdd" ]
+    [ "complement", "popCount", "negate", "abs", "fromInt", "fromInt64", "isZero", "isNegative", "isEven", "isOdd" ]
 
 
 {-| A name's fields, each `.field` glued to what it reads, as an expression's

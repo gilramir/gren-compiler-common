@@ -112,6 +112,10 @@ tests =
             Run.run PT.expression Context.empty "(r : BigInt where BigInt.fitsUnsigned 64 r && BigInt.isEven (r - 1) && r == BigInt.add (BigInt.shiftLeftBy 32 hi) lo)"
                 |> Result.map named
                 |> Expect.equal (Ok (Just { takenAt = Nothing, name = "r" }))
+        , test "`BigInt.abs` of one operand and `min` and `max` of two, any terms (geng-lang m4-refine-wrap.md §WR52)" <| \_ ->
+            Run.run PT.expression Context.empty "(r : BigInt where BigInt.abs (r - 1) < 10 && BigInt.min r lo <= BigInt.max (BigInt.abs lo) hi)"
+                |> Result.map named
+                |> Expect.equal (Ok (Just { takenAt = Nothing, name = "r" }))
         , test "`BigInt.fromInt` of one operand, a name, beside a comparison (geng-lang m4-refine-wrap.md §WR43)" <| \_ ->
             Run.run PT.expression Context.empty "(r : BigInt where r == BigInt.fromInt n && BigInt.maskTo w r == r)"
                 |> Result.map named
